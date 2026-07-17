@@ -7,6 +7,12 @@ func Init() error {
 	return tirtcclib.TiRtcInit()
 }
 
+// SetLogLevel configures TiRTC logging. Levels above 10 also enable TGTRP
+// logging at level-10 and should be set before Init.
+func SetLogLevel(level int) {
+	tirtcclib.TiRtcLogSetLevel(level)
+}
+
 // Start maps to TiRtcStart in WHIP service mode and installs Conn callbacks.
 func Start() error {
 	return tirtcclib.TiRtcStart("", callbacks())

@@ -7,6 +7,9 @@ func TiRtcGetVersion() string {
 	return ""
 }
 
+// TiRtcLogSetLevel maps to tiRTC.h TiRtcLogSetLevel.
+func TiRtcLogSetLevel(level int) {}
+
 // TiRtcInit maps to tiRTC.h TiRtcInit.
 func TiRtcInit() error {
 	return ErrUnavailable

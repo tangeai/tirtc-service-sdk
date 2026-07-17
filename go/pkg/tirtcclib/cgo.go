@@ -37,6 +37,11 @@ func TiRtcGetVersion() string {
 	return C.GoString(C.TiRtcGetVersion())
 }
 
+// TiRtcLogSetLevel maps to tiRTC.h TiRtcLogSetLevel.
+func TiRtcLogSetLevel(level int) {
+	C.TiRtcLogSetLevel(C.int(level))
+}
+
 // TiRtcInit maps to tiRTC.h TiRtcInit.
 func TiRtcInit() error {
 	return ErrorFromCode(int(C.TiRtcInit()))
