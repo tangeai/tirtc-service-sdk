@@ -4,7 +4,7 @@ package tirtcclib
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/../../../clib/include/tirtc
-#cgo LDFLAGS: -L${SRCDIR}/../../../clib/lib -lTiRTC -lm -Wl,-rpath,${SRCDIR}/../../../clib/lib
+#cgo LDFLAGS: ${SRCDIR}/../../../clib/lib/libTiRTC.a -lm -ldl
 #include <stdlib.h>
 #include "tiRTC.h"
 

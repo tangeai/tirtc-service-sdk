@@ -27,9 +27,16 @@ go build -tags tirtc_clib ./...
 ```
 
 The `tirtc_clib` build uses `../clib/include/tirtc/tiRTC.h` as the only C API
-header and links against native TiRTC libraries under `../clib/lib`:
+header. Native binaries are not committed to this repository. Download and
+install the required SDK as described in `../clib/README.md` before building.
+The wrapper expects:
 
-- `libTiRTC.so` or `libTiRTC.a`
+- `libTiRTC.a`
+- `libwebrtc.so` (runtime dependency of the desktop TiRTC SDK)
+
+Deploy `libwebrtc.so` next to the service binary or make its directory
+available through `LD_LIBRARY_PATH`. The cgo wrapper also links `libdl`, which
+is required by the desktop SDK loader.
 
 No lower-level C headers are exposed through the Go SDK.
 
