@@ -23,9 +23,9 @@ The SDK does not own HTTP endpoint design, WHIP `Location` resource management,
 or `DELETE` termination semantics. Application servers should implement those
 parts on top of the SDK.
 
-An example application service is provided under `go/examples/whip-service` to
-show one possible HTTP integration.
+An echo service under `examples/go/echo-service` demonstrates a complete,
+minimal HTTP integration and media loopback. A lower-level HTTP integration
+example also remains under `go/examples/whip-service`.
 
 The Python SDK is intentionally not implemented yet; its directory is reserved
 so the repository layout remains stable when Python support is added.
-

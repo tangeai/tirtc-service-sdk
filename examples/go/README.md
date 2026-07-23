@@ -1,9 +1,23 @@
 # Go Examples
 
-The SDK packages do not provide an HTTP server. Application servers should own
-their own endpoint, Location, and DELETE behavior.
+## Echo service
 
-Use `go/pkg/tirtcx` for TiRTC connection operations and TiRTC-X authenticated
-WHIP accept. Use `go/pkg/tirtcxauth` directly when issuing tokens.
+`echo-service` is a minimal customer-owned WHIP service. It verifies TiRTC-X
+tokens, implements the WHIP HTTP resource lifecycle, and echoes incoming audio
+and video frames.
 
-See `../../go/examples/whip-service` for a minimal application service example.
+Install the native dependency described in `../../clib/README.md`, then run:
+
+```bash
+cd examples/go/echo-service
+go run -tags tirtc_clib . \
+  -listen :8080 \
+  -service echo \
+  -access-key "$TIRTC_ACCESS_KEY" \
+  -public-key "$TIRTC_PUBLIC_KEY" \
+  -candidate 203.0.113.10
+```
+
+Omit `-candidate` when the service can advertise its local interface directly.
+The application, rather than the SDK, owns the HTTP endpoint, `Location`
+resource, and `DELETE` behavior.
