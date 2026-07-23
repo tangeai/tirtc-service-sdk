@@ -7,12 +7,19 @@ Go module for TiRTC WHIP service implementations.
 - `pkg/tirtcxauth`: Ed25519 TiRTC-X token issuing and verification.
 - `pkg/tirtcclib`: direct Go wrappers for `clib/include/tirtc/tiRTC.h`.
 - `pkg/tirtcx`: TiRTC `Conn` object and TiRTC-X authenticated WHIP helpers.
+- `pkg/whipecho`: embeddable diagnostic audio/video/command echo sessions.
 
 `pkg/tirtcclib` is intentionally a thin layer. Its exported names mirror the C
 API, for example `TiRtcWhipAccept`, `TiRtcSetOption`, and `TiRtcWhipConnect`.
 HTTP, Bearer token validation, session IDs, and timeout behavior belong to
 the application server. The SDK does not design HTTP endpoints, manage WHIP
 Location resources, or implement DELETE termination semantics.
+
+`pkg/whipecho` is an optional higher-level capability that registers its
+related `net/http` handlers under a caller-selected base path. Authentication
+is applied independently as standard middleware. See `../docs/echo.md`.
+The returned service exposes a concurrency-safe `Stats()` snapshot and accepts
+an optional `Observer` for application-owned monitoring integrations.
 
 ## Build Tags
 
@@ -94,14 +101,13 @@ for WHIP accept. It does not provide an HTTP handler.
 
 ## Example Service
 
-An example application-owned WHIP service is available at
-`examples/whip-service`. It demonstrates one possible `POST /whip` and
-`DELETE /resource/{id}` integration while keeping that HTTP behavior outside SDK
-packages.
+`examples/quick-start` demonstrates the minimum Echo HTTP and authentication
+integration. `examples/observable-service` adds Stats, observers, metrics, and
+structured logging.
 
 ```bash
-go run -tags tirtc_clib ./examples/whip-service \
-  -ak ak1 \
-  -sk "$PUBLIC_KEY" \
-  -service wxvoip
+go run -tags tirtc_clib ./examples/quick-start \
+  -access-key ak1 \
+  -public-key "$PUBLIC_KEY" \
+  -service echo
 ```

@@ -22,9 +22,20 @@ type Options struct {
 
 // WhipServer owns TiRTC-X token verification config and WHIP accept defaults.
 type WhipServer struct {
-	service   string
+	service  string
+	acceptor *WhipAcceptor
+	verifier tirtcxauth.TokenVerifier
+}
+
+// WhipAcceptor owns WHIP accept defaults without imposing an authentication
+// policy. HTTP authentication should normally be implemented as middleware.
+type WhipAcceptor struct {
 	candidate string
-	verifier  tirtcxauth.TokenVerifier
+}
+
+// NewWhipAcceptor creates an authentication-independent WHIP acceptor.
+func NewWhipAcceptor(candidate string) *WhipAcceptor {
+	return &WhipAcceptor{candidate: strings.TrimSpace(candidate)}
 }
 
 // NewWhipServer creates a TiRTC-X WHIP server initialized with a caller-provided verifier.
@@ -37,9 +48,9 @@ func NewWhipServer(opts Options) (*WhipServer, error) {
 		return nil, fmt.Errorf("%w: verifier is nil", ErrInvalidConfig)
 	}
 	return &WhipServer{
-		service:   opts.Service,
-		candidate: strings.TrimSpace(opts.Candidate),
-		verifier:  opts.Verifier,
+		service:  opts.Service,
+		acceptor: NewWhipAcceptor(opts.Candidate),
+		verifier: opts.Verifier,
 	}, nil
 }
 
@@ -70,8 +81,20 @@ func (s *WhipServer) WhipAccept(offer []byte, eventOptions ConnEventOptions) (*W
 	if s == nil {
 		return nil, ErrNilWhipServer
 	}
-	conn := newConn(s.candidate, eventOptions)
-	return acceptWHIPFunc(conn, offer, s.candidate)
+	acceptor := s.acceptor
+	if acceptor == nil {
+		acceptor = NewWhipAcceptor("")
+	}
+	return acceptor.WhipAccept(offer, eventOptions)
+}
+
+// WhipAccept calls TiRtcWhipAccept without performing authentication.
+func (a *WhipAcceptor) WhipAccept(offer []byte, eventOptions ConnEventOptions) (*WhipAcceptResult, error) {
+	if a == nil {
+		return nil, ErrNilWhipServer
+	}
+	conn := newConn(a.candidate, eventOptions)
+	return acceptWHIPFunc(conn, offer, a.candidate)
 }
 
 func acceptWHIP(conn *Conn, offer []byte, candidate string) (*WhipAcceptResult, error) {

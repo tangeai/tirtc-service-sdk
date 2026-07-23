@@ -19,13 +19,12 @@ The Go SDK provides:
 - A direct `tiRTC.h` wrapper layer with identifiers aligned to the C API.
 - A TiRTC `Conn` object layer for WHIP accept/connect and connection operations.
 
-The SDK does not own HTTP endpoint design, WHIP `Location` resource management,
-or `DELETE` termination semantics. Application servers should implement those
-parts on top of the SDK.
+The core connection packages do not impose HTTP endpoint design. The optional
+`pkg/whipecho` capability registers its related POST/DELETE handlers and keeps
+their `Location` values consistent.
 
-An echo service under `examples/go/echo-service` demonstrates a complete,
-minimal HTTP integration and media loopback. A lower-level HTTP integration
-example also remains under `go/examples/whip-service`.
+Go quick-start and observable Echo services under `go/examples/` demonstrate
+the reusable HTTP registration, authentication, statistics, and observers.
 
 The Python SDK is intentionally not implemented yet; its directory is reserved
 so the repository layout remains stable when Python support is added.
