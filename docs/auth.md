@@ -42,3 +42,28 @@ configuration systems that store keys without PEM wrapping.
 Verifiers may also inject a nonce verifier for replay protection. For example,
 the Go SDK supports `WithNonceVerifier(func(*TokenClaims) error)`, which can be
 backed by Redis `SETNX` with token expiry.
+
+## Go HTTP middleware
+
+`BearerInterceptor` verifies the bearer token against the request's complete
+raw query. A successful verification attaches a copy of the claims to the
+request context:
+
+```go
+handler := tirtcxauth.BearerInterceptor(serviceName, verifier)(
+    http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        claims, ok := tirtcxauth.ClaimsFromContext(r.Context())
+        if !ok {
+            http.Error(w, "missing verified claims", http.StatusInternalServerError)
+            return
+        }
+        slog.InfoContext(r.Context(), "accepted request",
+            "device_id", claims.Subject,
+            "access_key", claims.Issuer,
+        )
+    }),
+)
+```
+
+`ClaimsFromContext` returns a value copy so one handler cannot mutate the
+claims observed by another handler.

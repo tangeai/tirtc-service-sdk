@@ -35,8 +35,9 @@ The lower layer intentionally keeps C-style names:
 - `TiRtcSendVideoStream`
 - `TiRtcSendCommand`
 
-`tirtcx.Client.WhipAccept` verifies the WHIP request query/token through
-`tirtcxauth`, then starts the lower-level WHIP accept flow. It is built on top of:
+`tirtcx.WhipServer` keeps token verification and WHIP acceptance separate:
+call `Auth` with the raw query and bearer token, then call `WhipAccept` with
+the offer SDP. The acceptance path is built on top of:
 
 ```c
 int TiRtcWhipAccept(const char *offer, int offer_len,
@@ -49,9 +50,9 @@ int TiRtcWhipAccept(const char *offer, int offer_len,
 ## Conn Usage
 
 ```go
-client, err := tirtcx.New(tirtcx.Options{
+server, err := tirtcx.NewWhipServer(tirtcx.Options{
     Service:   "wxvoip",
-	Verifier:  verifier,
+    Verifier:  verifier,
     Candidate: "203.0.113.10", // optional
 })
 if err != nil {
@@ -63,12 +64,22 @@ defer tirtcx.Uninit()
 _ = tirtcx.Start()
 defer tirtcx.Stop()
 
-deviceID, result := client.WhipAccept(offerSDP, rawQuery, bearerToken)
-if result.Err != nil {
-    // handle error
+deviceID, err := server.Auth(rawQuery, bearerToken)
+if err != nil {
+    // return an authentication error
+}
+
+result, err := server.WhipAccept(offerSDP, tirtcx.ConnEventOptions{
+    CommandBuffer:      16,
+    DisconnectedBuffer: 4,
+})
+if err != nil {
+    // handle acceptance error
 }
 
 // Return result.AnswerSDP according to the application's HTTP design.
+answerSDP := result.AnswerSDP
+_ = answerSDP
 _ = deviceID
 
 conn, err := result.WaitConn(30 * time.Second)
@@ -76,9 +87,10 @@ if err != nil {
     // handle connection error
 }
 
-conn.OnCommand(func(cmd uint32, data []byte) {
-    // handle command
-})
+events := conn.Events()
+command := <-events.Command
+// Handle command.Cmd and command.Data.
+
 _ = conn.SendCommand(0x10000, []byte("hello"))
 ```
 

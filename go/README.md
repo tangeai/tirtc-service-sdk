@@ -68,30 +68,45 @@ claims, err := verifier.Verify("wxvoip", "device-1", "a=2&b=1", token)
 ## TiRTC-X Conn
 
 ```go
-client, err := tirtcx.New(tirtcx.Options{
+server, err := tirtcx.NewWhipServer(tirtcx.Options{
     Service:   "wxvoip",
     Verifier:  verifier,
+    Candidate: "203.0.113.10", // optional
 })
-_ = err
+if err != nil {
+    // handle config error
+}
 
 _ = tirtcx.Init()
 defer tirtcx.Uninit()
 _ = tirtcx.Start()
 defer tirtcx.Stop()
 
-deviceID, result := client.WhipAccept(offerSDP, "a=2&b=1", token)
-if result.Err != nil {
-    // handle accept error
+deviceID, err := server.Auth("a=2&b=1", token)
+if err != nil {
+    // return an authentication error
+}
+
+result, err := server.WhipAccept(offerSDP, tirtcx.ConnEventOptions{
+    AudioBuffer:        16,
+    DisconnectedBuffer: 4,
+})
+if err != nil {
+    // handle acceptance error
 }
 
 // The application owns HTTP behavior, including 201, Location, and DELETE.
 answerSDP := result.AnswerSDP
 
 conn, err := result.WaitConn(30 * time.Second)
-conn.OnAudio(func(frame tirtcx.AudioFrame) {
-    // handle audio
-})
+if err != nil {
+    // handle connection error
+}
 
+audioFrame := <-conn.Events().Audio
+// Handle audioFrame.Info and audioFrame.Data.
+
+_ = audioFrame
 _ = answerSDP
 _ = deviceID
 ```

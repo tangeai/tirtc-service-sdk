@@ -1,9 +1,12 @@
 package tirtcxauth
 
 import (
+	"context"
 	"net/http"
 	"strings"
 )
+
+type claimsContextKey struct{}
 
 // HTTPInterceptor is standard net/http middleware.
 type HTTPInterceptor func(http.Handler) http.Handler
@@ -40,8 +43,16 @@ func (o AuthObserverFuncs) AuthenticationFailed(reason AuthFailureReason) {
 	}
 }
 
+// ClaimsFromContext returns a copy of the verified token claims attached to an
+// HTTP request by BearerInterceptor.
+func ClaimsFromContext(ctx context.Context) (TokenClaims, bool) {
+	claims, ok := ctx.Value(claimsContextKey{}).(TokenClaims)
+	return claims, ok
+}
+
 // BearerInterceptor verifies the Authorization bearer token against the
-// request's complete raw query before invoking the next handler.
+// request's complete raw query. On success, it attaches a copy of the verified
+// claims to the request context before invoking the next handler.
 func BearerInterceptor(service string, verifier TokenVerifier, observers ...AuthObserver) HTTPInterceptor {
 	service = strings.TrimSpace(service)
 	return func(next http.Handler) http.Handler {
@@ -57,7 +68,8 @@ func BearerInterceptor(service string, verifier TokenVerifier, observers ...Auth
 				http.Error(w, "token verifier is not configured", http.StatusInternalServerError)
 				return
 			}
-			if _, err := verifier.Verify(service, "", r.URL.RawQuery, token); err != nil {
+			claims, err := verifier.Verify(service, "", r.URL.RawQuery, token)
+			if err != nil || claims == nil {
 				notifyAuthFailed(observers, AuthFailureInvalidToken)
 				http.Error(w, "invalid bearer token", http.StatusForbidden)
 				return
@@ -67,7 +79,8 @@ func BearerInterceptor(service string, verifier TokenVerifier, observers ...Auth
 					observer.Authenticated()
 				}
 			}
-			next.ServeHTTP(w, r)
+			ctx := context.WithValue(r.Context(), claimsContextKey{}, *claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
