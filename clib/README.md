@@ -1,14 +1,12 @@
-# TiRTC native dependency
+# TiRTC 原生库
 
-Native TiRTC libraries are intentionally not stored in this Git repository.
-The Go wrapper requires the following SDK package:
+本 Git 仓库不保存 TiRTC 原生库二进制文件。Go SDK 使用以下 SDK 包：
 
 ```text
 https://repo-sdk.tange-ai.com/repository/tirtc-sdks/ci/linux-x86_64-desktop/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard.tgz
 ```
 
-Download and install its libraries locally before building with the
-`tirtc_clib` tag:
+使用 `tirtc_clib` Build Tag 构建前，先下载并安装原生库：
 
 ```bash
 TIRTC_SDK_URL='https://repo-sdk.tange-ai.com/repository/tirtc-sdks/ci/linux-x86_64-desktop/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard.tgz'
@@ -19,6 +17,5 @@ cp "$sdk_dir/lib/libTiRTC.a" clib/lib/
 cp "$sdk_dir/lib/libwebrtc.so" clib/lib/
 ```
 
-`libTiRTC.a` is linked at build time. Deploy `libwebrtc.so` next to the
-service executable or make `clib/lib` available through `LD_LIBRARY_PATH`.
-Files under `clib/lib` are ignored by Git.
+构建时会链接 `libTiRTC.a`。部署时应将 `libwebrtc.so` 与服务程序放在同一目录，或通过
+`LD_LIBRARY_PATH` 加载 `clib/lib`。`clib/lib` 下的原生库文件不会提交到 Git。

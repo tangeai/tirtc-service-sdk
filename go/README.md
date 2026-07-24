@@ -1,56 +1,40 @@
 # whip-sdk Go
 
-Go module for TiRTC WHIP service implementations.
+用于开发 TiRTC WHIP Service 的 Go Module。
 
-## Packages
+## 包结构
 
-- `pkg/tirtcxauth`: Ed25519 TiRTC-X token issuing and verification.
-- `internal/tirtcclib`: internal Go wrappers for `clib/include/tirtc/tiRTC.h`.
-- `pkg/tirtcx`: TiRTC `Conn` object and authentication-independent WHIP helpers.
-- `pkg/whipecho`: embeddable diagnostic audio/video/command echo sessions.
+- `pkg/tirtcxauth`：基于 Ed25519 的 TiRTC-X Token 签发与验证。
+- `internal/tirtcclib`：`clib/include/tirtc/tiRTC.h` 的内部 Go 封装。
+- `pkg/tirtcx`：TiRTC `Conn` 对象和不包含认证策略的 WHIP 辅助能力。
+- `pkg/whipecho`：可嵌入的音频、视频和命令诊断 Echo Session。
 
-`internal/tirtcclib` is intentionally a thin implementation layer.
-Applications should use `pkg/tirtcx`; the Go `internal` boundary prevents
-direct use of the C wrapper. HTTP, Bearer token validation, session IDs, and
-timeout behavior belong to the application server. The SDK does not design
-HTTP endpoints, manage WHIP Location resources, or implement DELETE
-termination semantics.
+`internal/tirtcclib` 是精简的内部实现层。应用应使用 `pkg/tirtcx`；Go 的 `internal` 边界会阻止应用直接使用 C API 封装。HTTP、Bearer Token 验证、Session ID 和超时策略由应用服务端负责。SDK 不设计 HTTP 入口、不管理 WHIP `Location` 资源，也不定义 DELETE 终止语义。
 
-`pkg/whipecho` is an optional higher-level capability that provides composable
-`net/http` operations with a caller-selected Location prefix. The application owns
-route registration and applies authentication as standard middleware. See
-`../docs/echo.md`.
-The returned HTTP adapter exposes a concurrency-safe `Stats()` snapshot and accepts
-an optional `Observer` for application-owned monitoring integrations.
+`pkg/whipecho` 是可选的高层能力，提供可组合的 `net/http` 操作，并允许调用方指定 Location 前缀。应用负责注册路由，并以标准中间件方式添加认证，详见 [`../docs/echo.md`](../docs/echo.md)。
 
-## Build Tags
+返回的 HTTP Adapter 提供并发安全的 `Stats()` 快照，也可以通过可选的 `Observer` 接入应用自己的监控系统。
 
-By default, `internal/tirtcclib` compiles to stubs returning an unavailable
-error.
-This lets auth and connection-layer tests run on development machines without native
-TiRTC libraries.
+## Build Tag
 
-Build the real clib wrapper with:
+默认情况下，`internal/tirtcclib` 会编译为返回不可用错误的 Stub，使认证和连接层测试可以在没有 TiRTC 原生库的开发环境中运行。
+
+构建真实 clib 封装：
 
 ```bash
 go build -tags tirtc_clib ./...
 ```
 
-The `tirtc_clib` build uses `../clib/include/tirtc/tiRTC.h` as the only C API
-header. Native binaries are not committed to this repository. Download and
-install the required SDK as described in `../clib/README.md` before building.
-The wrapper expects:
+`tirtc_clib` 构建只使用 `../clib/include/tirtc/tiRTC.h` 作为 C API 头文件。本仓库不提交原生库二进制文件；构建前请按照 [`../clib/README.md`](../clib/README.md) 下载并安装 SDK。Go 封装需要：
 
 - `libTiRTC.a`
-- `libwebrtc.so` (runtime dependency of the desktop TiRTC SDK)
+- `libwebrtc.so`（TiRTC SDK 的运行时依赖）
 
-Deploy `libwebrtc.so` next to the service binary or make its directory
-available through `LD_LIBRARY_PATH`. The cgo wrapper also links `libdl`, which
-is required by the desktop SDK loader.
+应将 `libwebrtc.so` 与服务程序部署在同一目录，或将其目录加入 `LD_LIBRARY_PATH`。cgo 封装还会链接 SDK 加载所需的 `libdl`。
 
-No lower-level C headers are exposed through the Go SDK.
+Go SDK 不会暴露更底层的 C 头文件。
 
-## Token Issuer
+## Token 签发
 
 ```go
 issuer, err := tirtcxauth.NewEd25519TokenIssuer(map[string]string{
@@ -59,7 +43,7 @@ issuer, err := tirtcxauth.NewEd25519TokenIssuer(map[string]string{
 token, err := issuer.Issue("wxvoip", "ak1", "device-1", "b=1&a=2", time.Minute)
 ```
 
-## Token Verifier
+## Token 验证
 
 ```go
 verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{
@@ -71,14 +55,14 @@ claims, err := verifier.Verify("wxvoip", "device-1", "a=2&b=1", token)
 ## TiRTC-X Conn
 
 ```go
-acceptor := tirtcx.NewWhipAcceptor("203.0.113.10") // candidate is optional
+acceptor := tirtcx.NewWhipAcceptor("203.0.113.10") // candidate 可选
 
 _ = tirtcx.Init()
 defer tirtcx.Uninit()
 _ = tirtcx.Start()
 defer tirtcx.Stop()
 
-// The surrounding HTTP handler has already passed BearerInterceptor.
+// 外层 HTTP Handler 已通过 BearerInterceptor。
 acceptContext, cancelAccept := context.WithTimeout(r.Context(), 10*time.Second)
 defer cancelAccept()
 session, err := acceptor.WhipAccept(acceptContext, offerSDP, tirtcx.ConnEventOptions{
@@ -86,43 +70,37 @@ session, err := acceptor.WhipAccept(acceptContext, offerSDP, tirtcx.ConnEventOpt
     DisconnectedBuffer: 4,
 })
 if err != nil {
-    // handle acceptance error
+    // 处理 Accept 错误
 }
 
-// The application owns HTTP behavior, including 201, Location, and DELETE.
+// 应用负责包括 201、Location 和 DELETE 在内的 HTTP 行为。
 answerSDP := session.AnswerSDP()
 
 connectContext, cancelConnect := context.WithTimeout(context.Background(), 30*time.Second)
 defer cancelConnect()
 conn, err := session.WaitConn(connectContext)
 if err != nil {
-	// handle connection error
+    // 处理建连错误
 }
 defer session.Close()
 
 audioFrame := <-conn.Events().Audio
-// Handle audioFrame.Info and audioFrame.Data.
+// 处理 audioFrame.Info 和 audioFrame.Data。
 
 _ = audioFrame
 _ = answerSDP
 ```
 
-`WaitConn` may be called concurrently or repeatedly; every caller supplies its
-own wait context and receives the same eventual connection result. Canceling a
-wait does not close the session. The context passed to `WhipAccept` controls
-only the synchronous SDP-answer phase. After `WaitConn` succeeds, close the
-session explicitly when the application resource ends.
+`WaitConn` 支持并发或重复调用。每个调用方传入自己的等待 Context，并接收相同的最终建连结果。取消一次等待不会关闭 Session。传给 `WhipAccept` 的 Context 只控制同步生成 SDP Answer 的阶段。`WaitConn` 成功后，应在应用资源结束时显式关闭 Session。
 
-`pkg/tirtcx` wraps TiRTC connection operations without choosing an
-authentication policy or providing an HTTP handler. HTTP services should apply
-`tirtcxauth.BearerInterceptor` before calling `WhipAcceptor.WhipAccept`.
+`pkg/tirtcx` 封装 TiRTC 连接操作，不选择认证策略，也不提供 HTTP Handler。HTTP 服务应先应用 `tirtcxauth.BearerInterceptor`，再调用 `WhipAcceptor.WhipAccept`。
 
-## Example Service
+## 示例服务
 
-`examples/quick-start` demonstrates a normal WHIP business handler that sends
-synthetic audio/video while also exposing Echo mode. `examples/observable-service`
-adds Stats, observers, metrics, structured logging, and graceful HTTP shutdown.
-`examples/gin-service` demonstrates framework middleware integration.
+- `examples/quick-start`：发送生成的音视频，同时提供 Echo 模式的普通 WHIP 业务 Handler。
+- `examples/observable-service`：Stats、Observer、Metrics、结构化日志和 HTTP 优雅退出。
+- `examples/gin-service`：框架中间件接入。
+- `examples/whip-token-signer`：生成 `peer_id` 和连接 Token。
 
 ```bash
 cd examples/quick-start
@@ -132,5 +110,4 @@ go run -tags tirtc_clib . \
   -service quick-start
 ```
 
-The `examples` tree has its own `go.mod`, so example-only dependencies do not
-become dependencies of the SDK module.
+`examples` 使用独立的 `go.mod`，示例专用依赖不会成为 SDK Module 的依赖。

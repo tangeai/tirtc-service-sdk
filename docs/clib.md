@@ -13,7 +13,7 @@ Go SDK 的 `internal/tirtcclib` 包直接封装这一层。它是 `pkg/tirtcx` �
 
 ## 原生库
 
-本 Git 仓库不保存原生库二进制文件。请从以下地址下载所需的桌面端 SDK：
+本 Git 仓库不保存原生库二进制文件。请从以下地址下载 SDK：
 
 ```text
 https://repo-sdk.tange-ai.com/repository/tirtc-sdks/ci/linux-x86_64-desktop/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard.tgz
@@ -22,9 +22,9 @@ https://repo-sdk.tange-ai.com/repository/tirtc-sdks/ci/linux-x86_64-desktop/tirt
 安装命令见 `clib/README.md`。Go SDK 需要：
 
 - `libTiRTC.a`
-- `libwebrtc.so`（桌面端 TiRTC SDK 的运行时依赖）
+- `libwebrtc.so`（TiRTC SDK 的运行时依赖）
 
-使用桌面端 TiRTC SDK 时，应将 `libwebrtc.so` 与服务程序部署在同一目录，或将其目录加入 `LD_LIBRARY_PATH`。Linux 静态构建还会链接 `libdl`，Go 封装会自动配置该依赖。
+应将 `libwebrtc.so` 与服务程序部署在同一目录，或将其目录加入 `LD_LIBRARY_PATH`。Linux 静态构建还会链接 `libdl`，Go 封装会自动配置该依赖。
 
 使用真实 clib 封装构建 Go 代码：
 
