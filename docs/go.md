@@ -47,9 +47,13 @@ int TiRtcWhipAccept(const char *offer, int offer_len,
 ```go
 acceptor := tirtcx.NewWhipAcceptor("203.0.113.10") // candidate 可选
 
-_ = tirtcx.Init()
+if err := tirtcx.Init(); err != nil {
+    return err
+}
 defer tirtcx.Uninit()
-_ = tirtcx.Start()
+if err := tirtcx.Start(); err != nil {
+    return err
+}
 defer tirtcx.Stop()
 
 // 外层 HTTP Handler 已通过 BearerInterceptor。
@@ -63,7 +67,7 @@ session, err := acceptor.WhipAccept(acceptContext, offerSDP, tirtcx.ConnEventOpt
     },
 })
 if err != nil {
-    // 处理 Accept 错误
+    return err
 }
 
 // 按照应用的 HTTP 设计返回 session.AnswerSDP()。
@@ -74,7 +78,8 @@ connectContext, cancelConnect := context.WithTimeout(context.Background(), 30*ti
 defer cancelConnect()
 conn, err := session.WaitConn(connectContext)
 if err != nil {
-    // 处理建连错误
+    session.Close()
+    return err
 }
 defer session.Close()
 

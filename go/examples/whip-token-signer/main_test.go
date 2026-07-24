@@ -19,13 +19,13 @@ func TestSignWHIPToken(t *testing.T) {
 		accessKey:  "ak1",
 		privateKey: base64.RawURLEncoding.EncodeToString(privateKey),
 		deviceID:   "device-1",
-		rawQuery:   "?room=test&mode=echo",
+		rawQuery:   "?room=test&_tg_mode=echo",
 		ttl:        time.Hour,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if params.PeerID != "whips://echo?room=test&mode=echo" {
+	if params.PeerID != "whips://echo?room=test&_tg_mode=echo" {
 		t.Fatalf("peer_id = %q", params.PeerID)
 	}
 	verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{
@@ -34,7 +34,7 @@ func TestSignWHIPToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := verifier.Verify("echo", "device-1", "mode=echo&room=test", params.Token); err != nil {
+	if _, err := verifier.Verify("echo", "device-1", "_tg_mode=echo&room=test", params.Token); err != nil {
 		t.Fatalf("verify token: %v", err)
 	}
 }

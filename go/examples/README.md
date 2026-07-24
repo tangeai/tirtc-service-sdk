@@ -1,16 +1,12 @@
-# Go Examples
+# Go 示例
 
-Install the native dependency described in `../../clib/README.md` before
-running the examples.
+运行需要 TiRTC 的示例前，请先按照 [`../../clib/README.md`](../../clib/README.md) 安装原生库。
 
-The examples share `go/examples/go.mod`, so their application dependencies do
-not become dependencies of the SDK module.
+所有示例共用 `go/examples/go.mod`，示例应用的依赖不会成为 SDK 模块的依赖。
 
-## WHIP token signer
+## WHIP 令牌签发工具
 
-`whip-token-signer` generates a `peer_id` and a signed delegation token for an
-authorized device. It uses only the public `tirtcxauth` package and does not
-require the native TiRTC libraries.
+`whip-token-signer` 为已授权设备生成 `peer_id` 和签名后的长期委托令牌。它只使用公开的 `tirtcxauth` 包，不依赖 TiRTC 原生库。
 
 ```bash
 cd go/examples
@@ -19,20 +15,14 @@ go run ./whip-token-signer \
   -access-key "$TIRTC_ACCESS_KEY" \
   -private-key "$TIRTC_PRIVATE_KEY" \
   -device-id your_device_id \
-  -query 'mode=echo'
+  -query '_tg_mode=echo'
 ```
 
-The command writes `peer_id` and `token` as JSON. Use it for development and
-integration testing. A production business server must authorize the device
-before issuing the same parameters.
+命令以 JSON 格式输出 `peer_id` 和 `token`，用于开发和联调。生产环境中，业务服务端必须先验证设备是否有权访问目标服务，再签发相同的连接参数。
 
-## Quick start
+## 快速开始
 
-`quick-start` is a small but complete WHIP application. A normal device
-connection receives a generated 440 Hz PCM stream and moving-color JPEG video.
-The same WHIP entry also has the Echo capability, selected internally by the
-platform. The example owns its normal session Location and DELETE lifecycle.
-On shutdown it closes both normal and Echo sessions before stopping TiRTC-X.
+`quick-start` 是一个精简但完整的 WHIP 应用。普通设备连接会收到生成的 440 Hz PCM 音频和动态颜色 JPEG 视频。同一个 WHIP 入口也提供 Echo 能力，由平台内部选择。示例负责普通会话的 `Location` 和 DELETE 生命周期；退出时会先关闭普通会话和 Echo 会话，再停止 TiRTC-X。
 
 ```bash
 cd go/examples/quick-start
@@ -44,11 +34,9 @@ go run -tags tirtc_clib . \
   -candidate 203.0.113.10
 ```
 
-## Observable service
+## 可观测服务
 
-`observable-service` adds structured `slog` output, `HTTPAdapter.Stats()` snapshots,
-Echo and authentication observers, duration aggregation, and a sample
-Prometheus-text endpoint at `GET /metrics`.
+`observable-service` 展示结构化 `slog` 输出、`HTTPAdapter.Stats()` 快照、Echo 和认证观察器、时长聚合，以及 `GET /metrics` 的 Prometheus 文本格式示例。
 
 ```bash
 cd go/examples/observable-service
@@ -60,15 +48,11 @@ go run -tags tirtc_clib . \
   -candidate 203.0.113.10
 ```
 
-The metrics endpoint uses only the Go standard library so the SDK module does
-not acquire a monitoring-library dependency. Production applications can map
-the same Stats and Observer values into their existing metrics framework.
+监控指标入口只使用 Go 标准库，因此不会给 SDK 模块增加监控库依赖。生产应用可以将相同的统计和观察器值接入已有监控系统。
 
-## Gin service
+## Gin 服务
 
-`gin-service` demonstrates POST authentication and Echo selection as Gin
-middleware in front of a normal Gin WHIP handler. DELETE is unauthenticated,
-and Echo DELETE receives Gin's path parameter explicitly:
+`gin-service` 展示如何在普通 Gin WHIP 处理器前通过 Gin 中间件完成 POST 认证和 Echo 选择。DELETE 不做令牌认证，Echo DELETE 会显式接收 Gin 路径参数：
 
 ```bash
 cd go/examples/gin-service
@@ -80,5 +64,4 @@ go run -tags tirtc_clib . \
   -candidate 203.0.113.10
 ```
 
-Gin is declared only in `go/examples/go.mod`; it is not a dependency of the SDK
-module.
+Gin 只声明在 `go/examples/go.mod` 中，不是 SDK 模块的依赖。

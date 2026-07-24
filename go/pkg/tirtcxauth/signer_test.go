@@ -21,6 +21,28 @@ func TestCanonicalQuerySortsParameters(t *testing.T) {
 	}
 }
 
+func TestCanonicalQueryCompatibilityVectors(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want string
+	}{
+		{"empty&x=", "empty=&x="},
+		{"space=a+b&encoded=a%20b", "encoded=a+b&space=a+b"},
+		{"name=%E6%B5%8B%E8%AF%95", "name=%E6%B5%8B%E8%AF%95"},
+		{"raw=%FF&path=%2Ffoo%2Fbar", "path=%2Ffoo%2Fbar&raw=%FF"},
+		{"a=1&a=0", "a=1&a=0"},
+	}
+	for _, test := range tests {
+		got, err := CanonicalQuery(test.raw)
+		if err != nil {
+			t.Fatalf("CanonicalQuery(%q): %v", test.raw, err)
+		}
+		if got != test.want {
+			t.Errorf("CanonicalQuery(%q) = %q, want %q", test.raw, got, test.want)
+		}
+	}
+}
+
 func TestEd25519TokenIssueVerify(t *testing.T) {
 	publicKey, privateKey, err := ed25519.GenerateKey(nil)
 	if err != nil {

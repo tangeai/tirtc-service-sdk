@@ -10,6 +10,7 @@
 - `clib/include/tirtc/basedef.h`
 
 Go SDK 的 `internal/tirtcclib` 包直接封装这一层。它是 `pkg/tirtcx` 的内部实现，应用无法直接导入。
+Python SDK 的 `tirtcx` 包通过 `ctypes` 加载 TiRTC 动态库，不向应用暴露 C 结构体。
 
 ## 原生库
 
@@ -34,3 +35,6 @@ go build -tags tirtc_clib ./...
 ```
 
 不指定 `tirtc_clib` Build Tag 时，Go 封装会编译为 Stub，使纯 Go 包可以在没有原生库的环境中测试。
+
+Python SDK 将 `libTiRTC.so` 或 `libTiRTC.dylib` 放入 `clib/lib/`，也可以通过
+`TIRTC_PYTHON_LIBRARY` 指定绝对路径。Token 和 HTTP 认证测试不依赖原生库。

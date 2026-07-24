@@ -57,3 +57,16 @@ handler := tirtcxauth.BearerInterceptor(serviceName, verifier)(
 `ClaimsFromContext` 返回值副本，避免一个 Handler 修改另一个 Handler 观察到的 Claims。
 
 只对 WHIP POST Handler 使用该拦截器。当 `Location` 包含密码学安全的随机 Session ID 时，资源 DELETE 请求不携带 Bearer Token；持有该 `Location` 即具有删除权限。
+
+## Python HTTP 认证
+
+`verify_bearer` 返回与 Web 框架无关的认证结果：
+
+```python
+result = verify_bearer(authorization, service_name, raw_query, verifier)
+if not result.authenticated:
+    return result.error, result.status
+claims = result.claims
+```
+
+必须传入完整 Raw Query。验证成功时 `claims.subject` 是 Token 绑定的设备 ID。

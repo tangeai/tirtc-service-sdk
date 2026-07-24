@@ -1,6 +1,6 @@
 # 可嵌入的诊断 Echo
 
-`pkg/whipecho` 提供可以叠加到现有 WHIP HTTP Handler 上的诊断能力。平台内部路由负责选择 Echo 请求，普通请求继续交给应用的业务 Handler。
+Go 的 `pkg/whipecho` 和 Python 的 `whipecho` 提供可以叠加到现有 WHIP HTTP Handler 上的诊断能力。平台内部路由负责选择 Echo 请求，普通请求继续交给应用的业务 Handler。
 
 对于被选中的会话，Echo 模式会替代正常业务行为，Echo 组件是 `Conn.Events()` 的唯一消费者。
 
@@ -73,6 +73,9 @@ go run -tags tirtc_clib . \
 ```
 
 `go/examples/observable-service` 重点展示结构化日志、Stats 快照、Echo/认证 Observer 以及示例 `/metrics` 入口。
+
+Python 的 `HTTPAdapter.try_handle_post` 返回框架无关的 `HTTPResponse`；普通请求返回
+`None`。完整组合见 `python/examples/quick_start.py`。
 
 ## 监控
 
