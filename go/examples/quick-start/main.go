@@ -39,7 +39,8 @@ func main() {
 		logger.Error("create Echo capability", "error", err)
 		return
 	}
-	mux.HandleFunc("POST /whip", echo.Wrap(business))
+	auth := tirtcxauth.BearerInterceptor(*serviceName, verifier)
+	mux.HandleFunc("POST /whip", auth(echo.Wrap(business)))
 	mux.HandleFunc("DELETE /whip/resource/{session_id}", business.deleteResource)
 	mux.HandleFunc("DELETE /whip/echo/resource/{session_id}", echo.DeleteHandler())
 
@@ -56,7 +57,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              *listen,
-		Handler:           tirtcxauth.BearerInterceptor(*serviceName, verifier)(mux.ServeHTTP),
+		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}

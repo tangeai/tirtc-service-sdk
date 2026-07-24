@@ -3,6 +3,9 @@ package tirtcx
 import (
 	"context"
 	"errors"
+	"runtime"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
@@ -91,6 +94,45 @@ func TestBindConnHandleBindsConnSynchronously(t *testing.T) {
 	case <-audioCh:
 	default:
 		t.Fatal("audio callback was not available after bind")
+	}
+}
+
+func TestConnCloseAndBindDisconnectExactlyOnce(t *testing.T) {
+	oldDisconnect := disconnectConnFunc
+	defer func() { disconnectConnFunc = oldDisconnect }()
+	var calls atomic.Int64
+	disconnectConnFunc = func(tirtcclib.ConnHandle) error {
+		calls.Add(1)
+		return nil
+	}
+
+	for range 100 {
+		var raw byte
+		handle := tirtcclib.ConnHandle(unsafe.Pointer(&raw))
+		conn := newConn("", ConnEventOptions{})
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			<-start
+			conn.bindHandle(handle)
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			_ = conn.Close()
+			_ = conn.Close()
+		}()
+		close(start)
+		wg.Wait()
+	}
+	deadline := time.Now().Add(time.Second)
+	for calls.Load() != 100 && time.Now().Before(deadline) {
+		runtime.Gosched()
+	}
+	if got := calls.Load(); got != 100 {
+		t.Fatalf("disconnect calls = %d, want 100", got)
 	}
 }
 
@@ -256,10 +298,12 @@ func TestWhipAcceptRejectsCanceledContext(t *testing.T) {
 
 func TestAcceptContextCancellationClosesPendingConn(t *testing.T) {
 	conn := newConn("", ConnEventOptions{})
+	var canceled atomic.Int64
 	result := &WhipSession{
-		conn:      conn,
-		connReady: make(chan struct{}),
-		done:      make(chan struct{}),
+		conn:         conn,
+		connReady:    make(chan struct{}),
+		done:         make(chan struct{}),
+		cancelAccept: func() { canceled.Add(1) },
 	}
 	result.close(context.Canceled)
 	if _, err := result.WaitConn(context.Background()); !errors.Is(err, context.Canceled) {
@@ -267,6 +311,10 @@ func TestAcceptContextCancellationClosesPendingConn(t *testing.T) {
 	}
 	if !conn.closeRequested.Load() {
 		t.Fatal("pending conn was not marked for close")
+	}
+	result.close(context.Canceled)
+	if got := canceled.Load(); got != 1 {
+		t.Fatalf("pending accept cancel calls = %d, want 1", got)
 	}
 }
 

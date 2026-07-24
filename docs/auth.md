@@ -18,8 +18,7 @@ Claims:
   "scope": "connect:<service>:<sha256hex(canonical_query)>",
   "iss": "<access-key>",
   "iat": 1710000000,
-  "exp": 1710000300,
-  "nonce": "<random>"
+  "exp": 1712592000
 }
 ```
 
@@ -39,9 +38,11 @@ Preferred key formats are PEM PKCS8 private keys and PEM PKIX public keys.
 Language SDKs may also support raw base64url/base64/hex Ed25519 key bytes for
 configuration systems that store keys without PEM wrapping.
 
-Verifiers may also inject a nonce verifier for replay protection. For example,
-the Go SDK supports `WithNonceVerifier(func(*TokenClaims) error)`, which can be
-backed by Redis `SETNX` with token expiry.
+The token is a reusable delegation credential until `exp`. It has no nonce and
+the verifier performs no replay check. Protect individual connection attempts
+with the optional `nonce` field in `POST /v1/connect`; TiRTC Access rejects a
+reused request nonce. Current TiRTC device SDKs generate a fresh connect nonce
+without changing the public `TiRtcWhipConnect` API.
 
 ## Go HTTP middleware
 
@@ -67,3 +68,7 @@ handler := tirtcxauth.BearerInterceptor(serviceName, verifier)(
 
 `ClaimsFromContext` returns a value copy so one handler cannot mutate the
 claims observed by another handler.
+
+Apply the interceptor to WHIP POST handlers. Resource DELETE requests do not
+carry a bearer token when Location contains a cryptographically random session
+ID; possession of that Location authorizes deletion.

@@ -6,15 +6,15 @@ running the examples.
 The examples share `go/examples/go.mod`, so their application dependencies do
 not become dependencies of the SDK module.
 
-## Connection parameters
+## WHIP token signer
 
-`connection-params` generates a `peer_id` and a signed delegation token for an
+`whip-token-signer` generates a `peer_id` and a signed delegation token for an
 authorized device. It uses only the public `tirtcxauth` package and does not
 require the native TiRTC libraries.
 
 ```bash
 cd go/examples
-go run ./connection-params \
+go run ./whip-token-signer \
   -service quick-start \
   -access-key "$TIRTC_ACCESS_KEY" \
   -private-key "$TIRTC_PRIVATE_KEY" \
@@ -66,9 +66,9 @@ the same Stats and Observer values into their existing metrics framework.
 
 ## Gin service
 
-`gin-service` demonstrates authentication and Echo selection as Gin middleware
-in front of a normal Gin WHIP handler. Authentication is scoped to the
-`/whip` route group, and Echo DELETE receives Gin's path parameter explicitly:
+`gin-service` demonstrates POST authentication and Echo selection as Gin
+middleware in front of a normal Gin WHIP handler. DELETE is unauthenticated,
+and Echo DELETE receives Gin's path parameter explicitly:
 
 ```bash
 cd go/examples/gin-service

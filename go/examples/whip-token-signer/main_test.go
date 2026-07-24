@@ -9,12 +9,12 @@ import (
 	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/pkg/tirtcxauth"
 )
 
-func TestGenerateConnectionParams(t *testing.T) {
+func TestSignWHIPToken(t *testing.T) {
 	publicKey, privateKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	params, err := generateConnectionParams(options{
+	params, err := signWHIPToken(options{
 		service:    "echo",
 		accessKey:  "ak1",
 		privateKey: base64.RawURLEncoding.EncodeToString(privateKey),
@@ -39,8 +39,8 @@ func TestGenerateConnectionParams(t *testing.T) {
 	}
 }
 
-func TestGenerateConnectionParamsRequiresInputs(t *testing.T) {
-	_, err := generateConnectionParams(options{})
+func TestSignWHIPTokenRequiresInputs(t *testing.T) {
+	_, err := signWHIPToken(options{})
 	if err == nil {
 		t.Fatal("expected validation error")
 	}

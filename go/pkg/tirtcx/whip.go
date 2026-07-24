@@ -25,16 +25,18 @@ func NewWhipAcceptor(candidate string) *WhipAcceptor {
 // WhipSession owns a WHIP accept operation and its pending or connected Conn.
 // Applications own resource IDs, Location paths, registries, and DELETE policy.
 type WhipSession struct {
-	answerSDP  []byte
-	conn       *Conn
-	connReady  chan struct{}
-	resultOnce sync.Once
-	resultConn *Conn
-	resultErr  error
-	done       chan struct{}
-	closeOnce  sync.Once
-	closeErr   error
-	waitErr    error
+	answerSDP    []byte
+	conn         *Conn
+	connReady    chan struct{}
+	resultOnce   sync.Once
+	resultConn   *Conn
+	resultErr    error
+	done         chan struct{}
+	closeOnce    sync.Once
+	closeErr     error
+	waitErr      error
+	cancelOnce   sync.Once
+	cancelAccept func()
 }
 
 // WhipAccept calls TiRtcWhipAccept without performing authentication. ctx only
@@ -75,7 +77,7 @@ func acceptWHIP(
 		done:      make(chan struct{}),
 	}
 
-	err := tirtcclib.TiRtcWhipAccept(
+	cancelAccept, err := tirtcclib.TiRtcWhipAccept(
 		offer,
 		candidate,
 		func(sdp []byte) {
@@ -113,16 +115,17 @@ func acceptWHIP(
 		_ = conn.Close()
 		return nil, err
 	}
+	session.cancelAccept = cancelAccept
 
 	select {
 	case answer := <-sdpCh:
 		session.answerSDP = answer
 		return session, nil
 	case err := <-acceptErrCh:
-		_ = conn.Close()
+		_ = session.close(err)
 		return nil, err
 	case <-ctx.Done():
-		_ = conn.Close()
+		_ = session.close(ctx.Err())
 		return nil, ctx.Err()
 	}
 }
@@ -182,9 +185,21 @@ func (s *WhipSession) close(waitErr error) error {
 		if s.done != nil {
 			close(s.done)
 		}
+		s.cancelPendingAccept()
 		if s.conn != nil {
 			s.closeErr = s.conn.Close()
 		}
 	})
 	return s.closeErr
+}
+
+func (s *WhipSession) cancelPendingAccept() {
+	if s == nil {
+		return
+	}
+	s.cancelOnce.Do(func() {
+		if s.cancelAccept != nil {
+			s.cancelAccept()
+		}
+	})
 }

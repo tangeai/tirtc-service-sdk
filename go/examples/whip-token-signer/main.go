@@ -37,9 +37,9 @@ func main() {
 	flag.DurationVar(&opts.ttl, "ttl", 30*24*time.Hour, "token lifetime")
 	flag.Parse()
 
-	params, err := generateConnectionParams(opts)
+	params, err := signWHIPToken(opts)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "generate connection parameters:", err)
+		fmt.Fprintln(os.Stderr, "sign WHIP token:", err)
 		os.Exit(1)
 	}
 	encoder := json.NewEncoder(os.Stdout)
@@ -50,7 +50,7 @@ func main() {
 	}
 }
 
-func generateConnectionParams(opts options) (connectionParams, error) {
+func signWHIPToken(opts options) (connectionParams, error) {
 	opts.service = strings.TrimSpace(opts.service)
 	opts.accessKey = strings.TrimSpace(opts.accessKey)
 	opts.deviceID = strings.TrimSpace(opts.deviceID)

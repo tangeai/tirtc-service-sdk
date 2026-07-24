@@ -35,7 +35,10 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	metrics := &observedMetrics{}
 	verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{*accessKey: *publicKey})
-	must(err, logger)
+	if err != nil {
+		logger.Error("create token verifier", "error", err)
+		return
+	}
 
 	echoObserver := whipecho.ObserverFuncs{
 		OnSessionConnected: func(duration time.Duration) {
@@ -79,17 +82,26 @@ func main() {
 			Observer: echoObserver,
 		},
 	)
-	must(err, logger)
+	if err != nil {
+		logger.Error("create Echo capability", "error", err)
+		return
+	}
 	auth := tirtcxauth.BearerInterceptor(*serviceName, verifier, authObserver)
 	mux.HandleFunc("POST /whip", auth(echo.PostHandler()))
-	mux.HandleFunc("DELETE /whip/echo/resource/{session_id}", auth(echo.DeleteHandler()))
+	mux.HandleFunc("DELETE /whip/echo/resource/{session_id}", echo.DeleteHandler())
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, _ *http.Request) {
 		writeMetrics(w, echo.Stats(), metrics)
 	})
 
-	must(tirtcx.Init(), logger)
+	if err := tirtcx.Init(); err != nil {
+		logger.Error("initialize TiRTC-X", "error", err)
+		return
+	}
 	defer tirtcx.Uninit()
-	must(tirtcx.Start(), logger)
+	if err := tirtcx.Start(); err != nil {
+		logger.Error("start TiRTC-X", "error", err)
+		return
+	}
 	defer tirtcx.Stop()
 
 	server := &http.Server{
@@ -148,11 +160,4 @@ func writeMetrics(w http.ResponseWriter, stats whipecho.Stats, observed *observe
 	)
 	_, _ = fmt.Fprintf(w, "whip_auth_success_total %d\n", observed.authenticatedTotal.Load())
 	_, _ = fmt.Fprintf(w, "whip_auth_failed_total %d\n", observed.authFailedTotal.Load())
-}
-
-func must(err error, logger *slog.Logger) {
-	if err != nil {
-		logger.Error("fatal error", "error", err)
-		os.Exit(1)
-	}
 }

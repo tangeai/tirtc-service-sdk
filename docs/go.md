@@ -105,6 +105,8 @@ answer.
 
 Applications own the HTTP resource ID, Location, registry, and DELETE policy;
 DELETE should remove the application resource and call `session.Close()`.
+With a cryptographically random resource ID, DELETE does not need a bearer
+token; possession of the Location is the deletion capability.
 Subscription decisions use `SubscribeVideoHandler` and
 `SubscribeAudioHandler`, which return directly to the native callback and
 cannot be left waiting on a response channel.

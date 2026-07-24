@@ -51,6 +51,9 @@ func TestSessionManagerShutdownRejectsNewSessions(t *testing.T) {
 	if err := manager.Shutdown(context.Background()); err != nil {
 		t.Fatalf("Shutdown: %v", err)
 	}
+	if err := manager.Shutdown(context.Background()); err != nil {
+		t.Fatalf("repeated Shutdown: %v", err)
+	}
 	_, err = manager.Accept(context.Background(), AcceptRequest{OfferSDP: []byte("offer")})
 	if !errors.Is(err, ErrClosed) {
 		t.Fatalf("Accept error = %v, want ErrClosed", err)

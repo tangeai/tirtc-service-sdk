@@ -28,11 +28,12 @@ auth := tirtcxauth.BearerInterceptor(serviceName, verifier)
 mux.HandleFunc("POST /custom/whip", auth(echo.Wrap(businessHandler)))
 mux.HandleFunc(
     "DELETE /custom/whip/echo/resource/{session_id}",
-    auth(echo.DeleteHandler()),
+    echo.DeleteHandler(),
 )
 
 server := &http.Server{Addr: ":8080", Handler: mux}
-// Start and gracefully stop server according to the application lifecycle.
+go server.ListenAndServe()
+// On application shutdown:
 _ = server.Shutdown(shutdownContext)
 _ = echo.Shutdown(shutdownContext)
 ```
@@ -46,8 +47,9 @@ normalized.
 
 The adapter owns diagnostic selection, response formatting, and Echo
 session lifecycle. Normal requests are delegated without consuming their body.
-The application applies the same bearer-token interceptor to both handlers. A
-service omits Echo by mounting its business handler directly.
+Only POST requires bearer-token authentication. DELETE uses the unguessable
+random session ID returned in Location and does not transmit or verify a token.
+A service omits Echo by mounting its business handler directly.
 
 `HTTPAdapter` is stateful. During process shutdown, stop accepting HTTP
 requests and call `echo.Shutdown(ctx)` before `tirtcx.Stop()`. Shutdown rejects
@@ -62,8 +64,11 @@ interceptor once and keep its normal handler chain:
 
 ```go
 whip := router.Group("/custom/whip")
-whip.Use(ginAuth(tirtcxauth.BearerInterceptor(serviceName, verifier)))
-whip.POST("", echoMiddleware(echo), business.PostWHIP)
+whip.POST("",
+    ginAuth(tirtcxauth.BearerInterceptor(serviceName, verifier)),
+    echoMiddleware(echo),
+    business.PostWHIP,
+)
 whip.DELETE("/echo/resource/:session_id", echoDeleteHandler(echo))
 ```
 

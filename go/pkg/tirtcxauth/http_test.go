@@ -19,7 +19,6 @@ func TestBearerInterceptorPassesRawQuery(t *testing.T) {
 		Subject: "device-1",
 		Scope:   "connect:echo:scope",
 		Issuer:  "access-key",
-		Nonce:   "nonce",
 	}
 	verifier := verifierFunc(func(_, _, query, token string) (*TokenClaims, error) {
 		gotQuery, gotToken = query, token

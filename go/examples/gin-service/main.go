@@ -67,8 +67,12 @@ func main() {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	whip := router.Group("/whip")
-	whip.Use(ginAuth(tirtcxauth.BearerInterceptor(*serviceName, verifier)))
-	whip.POST("", echoMiddleware(echo), business.postWHIP)
+	whip.POST(
+		"",
+		ginAuth(tirtcxauth.BearerInterceptor(*serviceName, verifier)),
+		echoMiddleware(echo),
+		business.postWHIP,
+	)
 	whip.DELETE("/resource/:session_id", business.deleteResource)
 	whip.DELETE("/echo/resource/:session_id", echoDeleteHandler(echo))
 

@@ -42,7 +42,7 @@ type HTTPAdapter struct {
 // register:
 //
 //	mux.HandleFunc("POST /custom/whip", auth(echo.Wrap(business)))
-//	mux.HandleFunc("DELETE /custom/whip/echo/resource/{session_id}", auth(echo.DeleteHandler()))
+//	mux.HandleFunc("DELETE /custom/whip/echo/resource/{session_id}", echo.DeleteHandler())
 //
 // Other HTTP frameworks can call TryHandlePOST and ServeDelete directly.
 //

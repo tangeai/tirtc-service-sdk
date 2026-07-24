@@ -69,10 +69,12 @@ type SessionManager struct {
 	opts           Options
 	stats          *statsRecorder
 
-	mu       sync.Mutex
-	sessions map[string]*session
-	closed   bool
-	wg       sync.WaitGroup
+	mu           sync.Mutex
+	sessions     map[string]*session
+	closed       bool
+	wg           sync.WaitGroup
+	shutdownOnce sync.Once
+	shutdownDone chan struct{}
 }
 
 // NewSessionManager creates a stateful Echo session manager.
@@ -103,6 +105,7 @@ func NewSessionManager(
 		opts:           opts,
 		stats:          opts.stats,
 		sessions:       make(map[string]*session),
+		shutdownDone:   make(chan struct{}),
 	}, nil
 }
 
@@ -153,7 +156,7 @@ func (s *SessionManager) Accept(ctx context.Context, req AcceptRequest) (*Accept
 		s.recordAcceptFailure(AcceptStageWHIP)
 		return nil, err
 	}
-	pending := newSession(sessionID, "", whipSession, nil, s.opts, func(reason CloseReason) {
+	pending := newSession(sessionID, whipSession, nil, s.opts, func(reason CloseReason) {
 		s.remove(sessionID, reason)
 	})
 	s.mu.Lock()
@@ -207,8 +210,7 @@ func (s *SessionManager) waitAndRun(
 		return
 	}
 	s.opts.Logger.Info("echo session connected",
-		"session_id", session.id,
-		"device_id", session.deviceID)
+		"session_id", session.id)
 	s.opts.Observer.SessionConnected(time.Since(session.createdAt))
 	session.run(conn.Events())
 }
@@ -222,30 +224,31 @@ func (s *SessionManager) Shutdown(ctx context.Context) error {
 	if ctx == nil {
 		return fmt.Errorf("%w: shutdown context is nil", ErrInvalidArgument)
 	}
-	s.mu.Lock()
-	s.closed = true
-	sessions := make([]*session, 0, len(s.sessions))
-	for id, active := range s.sessions {
-		sessions = append(sessions, active)
-		delete(s.sessions, id)
-	}
-	s.stats.activeSessions.Store(0)
-	s.mu.Unlock()
-
-	for _, active := range sessions {
-		if err := active.shutdown(CloseReasonShutdown); err != nil {
-			s.opts.Logger.Error("close Echo session during shutdown",
-				"session_id", active.id,
-				"error", err)
+	s.shutdownOnce.Do(func() {
+		s.mu.Lock()
+		s.closed = true
+		sessions := make([]*session, 0, len(s.sessions))
+		for id, active := range s.sessions {
+			sessions = append(sessions, active)
+			delete(s.sessions, id)
 		}
-	}
-	done := make(chan struct{})
-	go func() {
-		s.wg.Wait()
-		close(done)
-	}()
+		s.stats.activeSessions.Store(0)
+		s.mu.Unlock()
+
+		for _, active := range sessions {
+			if err := active.shutdown(CloseReasonShutdown); err != nil {
+				s.opts.Logger.Error("close Echo session during shutdown",
+					"session_id", active.id,
+					"error", err)
+			}
+		}
+		go func() {
+			s.wg.Wait()
+			close(s.shutdownDone)
+		}()
+	})
 	select {
-	case <-done:
+	case <-s.shutdownDone:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

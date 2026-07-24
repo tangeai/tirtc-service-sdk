@@ -7,6 +7,8 @@ import (
 	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/internal/tirtcclib"
 )
 
+var disconnectConnFunc = tirtcclib.TiRtcDisconnect
+
 // MinEventBufferSize is the minimum buffer capacity for enabled Conn event channels.
 const MinEventBufferSize = 4
 
@@ -48,6 +50,8 @@ type Conn struct {
 
 	candidate      string
 	closeRequested atomic.Bool
+	disconnectOnce sync.Once
+	disconnectErr  error
 	doneCh         chan struct{}
 	terminalOnce   sync.Once
 	terminalMu     sync.RWMutex
@@ -119,10 +123,11 @@ func (c *Conn) Handle() tirtcclib.ConnHandle {
 func (c *Conn) bindHandle(handle tirtcclib.ConnHandle) {
 	c.handleMu.Lock()
 	c.handle = handle
+	closeRequested := c.closeRequested.Load()
 	c.handleMu.Unlock()
-	if c.closeRequested.Load() {
+	if closeRequested {
 		go func() {
-			_ = tirtcclib.TiRtcDisconnect(handle)
+			_ = c.disconnect(handle)
 		}()
 	}
 }
@@ -256,10 +261,22 @@ func (c *Conn) SendBufferUsed() uint64 {
 }
 
 func (c *Conn) Close() error {
-	handle := c.Handle()
-	if handle == nil {
-		c.closeRequested.Store(true)
+	if c == nil {
 		return nil
 	}
-	return tirtcclib.TiRtcDisconnect(handle)
+	c.handleMu.Lock()
+	c.closeRequested.Store(true)
+	handle := c.handle
+	c.handleMu.Unlock()
+	if handle == nil {
+		return nil
+	}
+	return c.disconnect(handle)
+}
+
+func (c *Conn) disconnect(handle tirtcclib.ConnHandle) error {
+	c.disconnectOnce.Do(func() {
+		c.disconnectErr = disconnectConnFunc(handle)
+	})
+	return c.disconnectErr
 }

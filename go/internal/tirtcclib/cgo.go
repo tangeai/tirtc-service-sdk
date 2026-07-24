@@ -3,8 +3,8 @@
 package tirtcclib
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../../../clib/include/tirtc
-#cgo LDFLAGS: ${SRCDIR}/../../../../clib/lib/libTiRTC.a -lm -ldl
+#cgo CFLAGS: -I${SRCDIR}/../../../clib/include/tirtc
+#cgo LDFLAGS: ${SRCDIR}/../../../clib/lib/libTiRTC.a -lm -ldl
 #include <stdlib.h>
 #include "tiRTC.h"
 
@@ -82,7 +82,12 @@ func TiRtcSetOption(option Option, value []byte) error {
 }
 
 // TiRtcWhipAccept maps to tiRTC.h TiRtcWhipAccept.
-func TiRtcWhipAccept(offer []byte, candidate string, onSDP WhipServerOnSDPReadyCallback, cb ConnectCallback) error {
+func TiRtcWhipAccept(
+	offer []byte,
+	candidate string,
+	onSDP WhipServerOnSDPReadyCallback,
+	cb ConnectCallback,
+) (func(), error) {
 	key := C.malloc(1)
 	whipRegistryMu.Lock()
 	whipRegistry[key] = whipCallbacks{onSDP: onSDP, cb: cb}
@@ -104,8 +109,28 @@ func TiRtcWhipAccept(offer []byte, candidate string, onSDP WhipServerOnSDPReadyC
 		delete(whipRegistry, key)
 		whipRegistryMu.Unlock()
 		C.free(key)
+		return nil, ErrorFromCode(int(ret))
 	}
-	return ErrorFromCode(int(ret))
+	var cancelOnce sync.Once
+	cancel := func() {
+		cancelOnce.Do(func() {
+			whipRegistryMu.Lock()
+			entry, ok := whipRegistry[key]
+			if ok {
+				entry.onSDP = nil
+				entry.cb = func(_ int, hconn ConnHandle) {
+					if hconn != nil {
+						go func() {
+							_ = TiRtcDisconnect(hconn)
+						}()
+					}
+				}
+				whipRegistry[key] = entry
+			}
+			whipRegistryMu.Unlock()
+		})
+	}
+	return cancel, nil
 }
 
 // TiRtcWhipConnect maps to tiRTC.h TiRtcWhipConnect.

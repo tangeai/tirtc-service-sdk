@@ -16,7 +16,6 @@ const (
 
 type session struct {
 	id          string
-	deviceID    string
 	whipSession *tirtcx.WhipSession
 	conn        *tirtcx.Conn
 	opts        Options
@@ -29,14 +28,13 @@ type session struct {
 
 func newSession(
 	id string,
-	deviceID string,
 	whipSession *tirtcx.WhipSession,
 	conn *tirtcx.Conn,
 	opts Options,
 	onDone func(CloseReason),
 ) *session {
 	s := &session{
-		id: id, deviceID: deviceID, whipSession: whipSession, conn: conn, opts: opts, onDone: onDone,
+		id: id, whipSession: whipSession, conn: conn, opts: opts, onDone: onDone,
 		createdAt: time.Now(),
 	}
 	return s
