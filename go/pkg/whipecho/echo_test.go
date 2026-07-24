@@ -33,12 +33,9 @@ func TestNewRejectsNilAcceptor(t *testing.T) {
 	}
 }
 
-func TestProbePayloadRoundTrip(t *testing.T) {
-	now := time.Now()
-	payload := makeProbePayload(42, now, 160)
-	info, ok := parseProbePayload(payload)
-	if !ok || info.seq != 42 || info.sentAtNS != now.UnixNano() {
-		t.Fatalf("parseProbePayload = %+v, %v", info, ok)
+func TestTimeSyncCommandWords(t *testing.T) {
+	if CmdTimeSyncRequest != 0x2010 || CmdTimeSyncResponse != 0x2011 {
+		t.Fatalf("time sync commands = %#x/%#x", CmdTimeSyncRequest, CmdTimeSyncResponse)
 	}
 }
 

@@ -1,8 +1,6 @@
 package whipecho
 
 import (
-	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 
@@ -22,7 +20,6 @@ type session struct {
 	conn      *tirtcx.Conn
 	opts      Options
 	onDone    func(CloseReason)
-	latency   *latencyRunner
 	createdAt time.Time
 
 	mu     sync.Mutex
@@ -34,7 +31,6 @@ func newSession(id, deviceID string, conn *tirtcx.Conn, opts Options, onDone fun
 		id: id, deviceID: deviceID, conn: conn, opts: opts, onDone: onDone,
 		createdAt: time.Now(),
 	}
-	s.latency = newLatencyRunner(s)
 	return s
 }
 
@@ -55,9 +51,6 @@ func (s *session) run(events tirtcx.ConnEvents) {
 			if !ok {
 				s.finish(CloseReasonEventChannelClosed)
 				return
-			}
-			if s.latency.handleAudio(frame) {
-				continue
 			}
 			frame.Info.Ts = packAudioTimestamp(time.Now().UnixMicro(), frame.Info.Ts)
 			if err := s.conn.SendAudio(frame.Info, frame.Data); err != nil {
@@ -116,21 +109,12 @@ func (s *session) run(events tirtcx.ConnEvents) {
 
 func (s *session) handleCommand(cmd uint32, data []byte) {
 	switch cmd {
-	case CmdLatencyStart:
-		var request LatencyStartRequest
-		if len(data) > 0 {
-			if err := json.Unmarshal(data, &request); err != nil {
-				s.sendCommandError(fmt.Errorf("invalid latency start payload: %w", err))
-				return
-			}
-		}
-		if err := s.latency.start(request); err != nil {
-			s.sendCommandError(err)
-		}
 	case CmdTimeSyncRequest:
 		payload, err := marshalTimeSync(data, time.Now())
 		if err != nil {
-			s.sendCommandError(fmt.Errorf("invalid time sync payload: %w", err))
+			s.opts.Logger.Warn("invalid time sync payload",
+				"session_id", s.id,
+				"error", err)
 			return
 		}
 		if err := s.conn.SendCommand(CmdTimeSyncResponse, payload); err != nil {
@@ -139,16 +123,6 @@ func (s *session) handleCommand(cmd uint32, data []byte) {
 			s.opts.Logger.Error("send time sync response failed",
 				"session_id", s.id,
 				"error", err)
-		}
-	}
-}
-
-func (s *session) sendCommandError(err error) {
-	payload, marshalErr := json.Marshal(LatencyError{Version: 1, Error: err.Error()})
-	if marshalErr == nil {
-		if sendErr := s.conn.SendCommand(CmdLatencyError, payload); sendErr != nil {
-			s.opts.stats.sendFailedTotal.Add(1)
-			s.opts.Observer.SendFailed(MediaTypeCommand)
 		}
 	}
 }
@@ -174,7 +148,6 @@ func (s *session) shutdown(reason CloseReason) error {
 	s.closed = true
 	conn := s.conn
 	s.mu.Unlock()
-	s.latency.stop()
 	var err error
 	if conn != nil {
 		s.opts.stats.recordDropped(s.opts.Observer, conn.EventStats())

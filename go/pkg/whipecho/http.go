@@ -18,18 +18,13 @@ const defaultMaxSDPBytes = 1 << 20
 
 // HTTPOptions configures the Echo HTTP handlers.
 type HTTPOptions struct {
-	Candidate          string
-	Enabled            bool
-	RequireMode        bool
-	MaxSDPBytes        int64
-	ConnTimeout        time.Duration
-	LatencyRepeat      int
-	LatencyInterval    time.Duration
-	LatencyTimeout     time.Duration
-	LatencyProbeBytes  int
-	LatencyAudioStream uint8
-	Logger             *slog.Logger
-	Observer           Observer
+	Candidate   string
+	Enabled     bool
+	RequireMode bool
+	MaxSDPBytes int64
+	ConnTimeout time.Duration
+	Logger      *slog.Logger
+	Observer    Observer
 }
 
 // RegisterHTTPHandlers creates an Echo service and registers its related HTTP
@@ -61,18 +56,13 @@ func RegisterHTTPHandlers(
 	}
 
 	service, err := New(Options{
-		Acceptor:           tirtcx.NewWhipAcceptor(opts.Candidate),
-		Enabled:            opts.Enabled,
-		RequireMode:        opts.RequireMode,
-		LocationPrefix:     basePath + "/resource",
-		ConnTimeout:        opts.ConnTimeout,
-		LatencyRepeat:      opts.LatencyRepeat,
-		LatencyInterval:    opts.LatencyInterval,
-		LatencyTimeout:     opts.LatencyTimeout,
-		LatencyProbeBytes:  opts.LatencyProbeBytes,
-		LatencyAudioStream: opts.LatencyAudioStream,
-		Logger:             opts.Logger,
-		Observer:           opts.Observer,
+		Acceptor:       tirtcx.NewWhipAcceptor(opts.Candidate),
+		Enabled:        opts.Enabled,
+		RequireMode:    opts.RequireMode,
+		LocationPrefix: basePath + "/resource",
+		ConnTimeout:    opts.ConnTimeout,
+		Logger:         opts.Logger,
+		Observer:       opts.Observer,
 	})
 	if err != nil {
 		return nil, err

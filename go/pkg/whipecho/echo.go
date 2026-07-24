@@ -22,12 +22,8 @@ const (
 	ModeQueryKey = "_tg_mode"
 	ModeEcho     = "echo"
 
-	CmdLatencyStart  uint32 = 0x2000
-	CmdLatencyResult uint32 = 0x2001
-	CmdLatencyError  uint32 = 0x2002
-
-	CmdTimeSyncRequest  uint32 = 0x2003
-	CmdTimeSyncResponse uint32 = 0x2004
+	CmdTimeSyncRequest  uint32 = 0x2010
+	CmdTimeSyncResponse uint32 = 0x2011
 )
 
 var (
@@ -55,18 +51,13 @@ type Options struct {
 	Acceptor interface {
 		WhipAccept([]byte, tirtcx.ConnEventOptions) (*tirtcx.WhipAcceptResult, error)
 	}
-	Enabled            bool
-	RequireMode        bool
-	LocationPrefix     string
-	ConnTimeout        time.Duration
-	LatencyRepeat      int
-	LatencyInterval    time.Duration
-	LatencyTimeout     time.Duration
-	LatencyProbeBytes  int
-	LatencyAudioStream uint8
-	Logger             *slog.Logger
-	Observer           Observer
-	stats              *statsRecorder
+	Enabled        bool
+	RequireMode    bool
+	LocationPrefix string
+	ConnTimeout    time.Duration
+	Logger         *slog.Logger
+	Observer       Observer
+	stats          *statsRecorder
 }
 
 type Service struct {
@@ -87,18 +78,6 @@ func New(opts Options) (*Service, error) {
 	opts.LocationPrefix = "/" + strings.Trim(strings.TrimSpace(opts.LocationPrefix), "/")
 	if opts.ConnTimeout <= 0 {
 		opts.ConnTimeout = 30 * time.Second
-	}
-	if opts.LatencyRepeat <= 0 {
-		opts.LatencyRepeat = 10
-	}
-	if opts.LatencyInterval <= 0 {
-		opts.LatencyInterval = 100 * time.Millisecond
-	}
-	if opts.LatencyTimeout <= 0 {
-		opts.LatencyTimeout = time.Second
-	}
-	if opts.LatencyProbeBytes <= 0 {
-		opts.LatencyProbeBytes = 160
 	}
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
