@@ -1,6 +1,6 @@
 package tirtcx
 
-import "gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/pkg/tirtcclib"
+import "gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/internal/tirtcclib"
 
 type MediaType = tirtcclib.MediaType
 type FrameInfo = tirtcclib.FrameInfo

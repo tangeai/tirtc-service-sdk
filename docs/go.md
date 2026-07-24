@@ -2,7 +2,7 @@
 
 The Go SDK lives under `go/` and is split into four layers:
 
-- `pkg/tirtcclib`: direct `tiRTC.h` wrappers. No HTTP, token, or session logic.
+- `internal/tirtcclib`: internal `tiRTC.h` wrappers used by `pkg/tirtcx`.
 - `pkg/tirtcxauth`: Ed25519 TiRTC-X token issuing and verification.
 - `pkg/tirtcx`: TiRTC `Conn` object and TiRTC-X authenticated WHIP helpers.
 - `pkg/whipecho`: reusable Echo sessions and HTTP-handler registration.

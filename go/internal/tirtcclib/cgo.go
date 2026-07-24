@@ -3,8 +3,8 @@
 package tirtcclib
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../../clib/include/tirtc
-#cgo LDFLAGS: ${SRCDIR}/../../../clib/lib/libTiRTC.a -lm -ldl
+#cgo CFLAGS: -I${SRCDIR}/../../../../clib/include/tirtc
+#cgo LDFLAGS: ${SRCDIR}/../../../../clib/lib/libTiRTC.a -lm -ldl
 #include <stdlib.h>
 #include "tiRTC.h"
 

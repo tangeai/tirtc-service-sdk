@@ -5,15 +5,16 @@ Go module for TiRTC WHIP service implementations.
 ## Packages
 
 - `pkg/tirtcxauth`: Ed25519 TiRTC-X token issuing and verification.
-- `pkg/tirtcclib`: direct Go wrappers for `clib/include/tirtc/tiRTC.h`.
+- `internal/tirtcclib`: internal Go wrappers for `clib/include/tirtc/tiRTC.h`.
 - `pkg/tirtcx`: TiRTC `Conn` object and TiRTC-X authenticated WHIP helpers.
 - `pkg/whipecho`: embeddable diagnostic audio/video/command echo sessions.
 
-`pkg/tirtcclib` is intentionally a thin layer. Its exported names mirror the C
-API, for example `TiRtcWhipAccept`, `TiRtcSetOption`, and `TiRtcWhipConnect`.
-HTTP, Bearer token validation, session IDs, and timeout behavior belong to
-the application server. The SDK does not design HTTP endpoints, manage WHIP
-Location resources, or implement DELETE termination semantics.
+`internal/tirtcclib` is intentionally a thin implementation layer.
+Applications should use `pkg/tirtcx`; the Go `internal` boundary prevents
+direct use of the C wrapper. HTTP, Bearer token validation, session IDs, and
+timeout behavior belong to the application server. The SDK does not design
+HTTP endpoints, manage WHIP Location resources, or implement DELETE
+termination semantics.
 
 `pkg/whipecho` is an optional higher-level capability that registers its
 related `net/http` handlers under a caller-selected base path. Authentication
@@ -23,7 +24,8 @@ an optional `Observer` for application-owned monitoring integrations.
 
 ## Build Tags
 
-By default, `pkg/tirtcclib` compiles to stubs returning `tirtcclib.ErrUnavailable`.
+By default, `internal/tirtcclib` compiles to stubs returning an unavailable
+error.
 This lets auth and connection-layer tests run on development machines without native
 TiRTC libraries.
 

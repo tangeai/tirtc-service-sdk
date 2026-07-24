@@ -10,9 +10,9 @@ Current headers:
 - `clib/include/tirtc/tiRTC.h`
 - `clib/include/tirtc/basedef.h`
 
-The Go SDK's `pkg/tirtcclib` package is a direct wrapper for this layer. It
-keeps exported Go identifiers aligned with the C API names, such as
-`TiRtcWhipAccept` and `TiRtcWhipConnect`.
+The Go SDK's `internal/tirtcclib` package is a direct wrapper for this layer.
+It is an implementation detail of `pkg/tirtcx`; applications cannot import it
+directly.
 
 ## Native Libraries
 

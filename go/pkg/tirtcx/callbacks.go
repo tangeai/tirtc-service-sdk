@@ -3,7 +3,7 @@ package tirtcx
 import (
 	"sync"
 
-	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/pkg/tirtcclib"
+	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/internal/tirtcclib"
 )
 
 var (

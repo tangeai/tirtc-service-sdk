@@ -1,6 +1,6 @@
 package tirtcx
 
-import "gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/pkg/tirtcclib"
+import "gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/internal/tirtcclib"
 
 // Init maps to TiRtcInit and registers SDK callbacks through Start.
 func Init() error {
