@@ -1,17 +1,12 @@
-# Embeddable diagnostic echo
+# 可嵌入的诊断 Echo
 
-`pkg/whipecho` provides a diagnostic capability that can be layered onto an
-existing WHIP HTTP handler. Platform-internal routing selects Echo requests;
-ordinary requests continue to the application's business handler.
+`pkg/whipecho` 提供可以叠加到现有 WHIP HTTP Handler 上的诊断能力。平台内部路由负责选择 Echo 请求，普通请求继续交给应用的业务 Handler。
 
-Echo mode replaces the normal service behavior for that session. The Echo
-component is the sole consumer of `Conn.Events()`.
+对于被选中的会话，Echo 模式会替代正常业务行为，Echo 组件是 `Conn.Events()` 的唯一消费者。
 
-## In-process HTTP handler
+## 进程内 HTTP Handler
 
-The normal integration follows standard `net/http` composition: construct the
-Echo capability, wrap the business handler, and let the application own route
-and middleware registration:
+标准 `net/http` 接入方式是：创建 Echo 能力、包装业务 Handler，并由应用管理路由和中间件注册：
 
 ```go
 acceptor := tirtcx.NewWhipAcceptor(candidate)
@@ -33,34 +28,25 @@ mux.HandleFunc(
 
 server := &http.Server{Addr: ":8080", Handler: mux}
 go server.ListenAndServe()
-// On application shutdown:
+// 应用退出时：
 _ = server.Shutdown(shutdownContext)
 _ = echo.Shutdown(shutdownContext)
 ```
 
-For the Location prefix above, the application registers
-`POST /custom/whip` and
-`DELETE /custom/whip/echo/resource/{session_id}`. The POST response Location uses
-the latter route. The Location prefix is validated strictly; a trailing slash,
-relative path, or non-canonical path returns an error rather than being silently
-normalized.
+对于上述 Location 前缀，应用需要注册：
 
-The adapter owns diagnostic selection, response formatting, and Echo
-session lifecycle. Normal requests are delegated without consuming their body.
-Only POST requires bearer-token authentication. DELETE uses the unguessable
-random session ID returned in Location and does not transmit or verify a token.
-A service omits Echo by mounting its business handler directly.
+- `POST /custom/whip`
+- `DELETE /custom/whip/echo/resource/{session_id}`
 
-`HTTPAdapter` is stateful. During process shutdown, stop accepting HTTP
-requests and call `echo.Shutdown(ctx)` before `tirtcx.Stop()`. Shutdown rejects
-new Echo sessions, closes all active sessions, and waits for their goroutines.
+POST 响应中的 `Location` 使用后一个路由。Location 前缀会被严格验证；尾部斜杠、相对路径或非规范路径都会返回错误，不会被静默规范化。
 
-## Other HTTP frameworks
+Adapter 负责诊断请求选择、响应格式和 Echo Session 生命周期。普通请求会在不读取 Body 的情况下交给业务 Handler。只有 POST 需要 Bearer Token 认证；DELETE 使用 `Location` 中不可预测的随机 Session ID，不传输也不验证 Token。不需要 Echo 的服务可以直接挂载业务 Handler。
 
-`TryHandlePOST` and `ServeDelete` are the framework-neutral integration points.
-`TryHandlePOST` returns false for an ordinary business request without consuming
-its body. For example, a Gin service can adapt the standard HTTP authentication
-interceptor once and keep its normal handler chain:
+`HTTPAdapter` 是有状态对象。进程退出时，应先停止接收 HTTP 请求，再调用 `echo.Shutdown(ctx)`，最后调用 `tirtcx.Stop()`。Shutdown 会拒绝新的 Echo Session、关闭全部活动 Session，并等待其 Goroutine 退出。
+
+## 其他 HTTP 框架
+
+`TryHandlePOST` 和 `ServeDelete` 是与框架无关的接入点。对于普通业务请求，`TryHandlePOST` 返回 `false`，且不会读取 Body。例如，Gin 服务可以复用标准 HTTP 认证拦截器，并保留正常的 Handler 链：
 
 ```go
 whip := router.Group("/custom/whip")
@@ -72,15 +58,11 @@ whip.POST("",
 whip.DELETE("/echo/resource/:session_id", echoDeleteHandler(echo))
 ```
 
-The same pattern works with any framework that exposes an
-`http.ResponseWriter` and `*http.Request`. Framework adapters remain in the
-host service, so `whipecho` does not depend on Gin or another router.
+任何能够提供 `http.ResponseWriter` 和 `*http.Request` 的框架都可以使用相同模式。框架 Adapter 保留在宿主服务中，因此 `whipecho` 不依赖 Gin 或其他路由库。
 
-## Example application
+## 示例应用
 
-`go/examples/quick-start` demonstrates composition with a normal WHIP
-business handler. Normal sessions receive generated PCM audio and JPEG video;
-the same endpoint also provides Echo:
+`go/examples/quick-start` 展示了 Echo 与普通 WHIP 业务 Handler 的组合方式。普通会话接收生成的 PCM 音频和 JPEG 视频，同一入口也提供 Echo 能力：
 
 ```bash
 cd go/examples/quick-start
@@ -90,13 +72,11 @@ go run -tags tirtc_clib . \
   -public-key "$TIRTC_PUBLIC_KEY"
 ```
 
-`go/examples/observable-service` focuses on structured logging, Stats
-snapshots, Echo/auth observers, and a sample `/metrics` endpoint.
+`go/examples/observable-service` 重点展示结构化日志、Stats 快照、Echo/认证 Observer 以及示例 `/metrics` 入口。
 
-## Monitoring
+## 监控
 
-`NewHTTPAdapter` returns the stateful Echo HTTP adapter. `Stats` is a
-thread-safe snapshot with an active-session gauge and monotonic counters:
+`NewHTTPAdapter` 返回有状态的 Echo HTTP Adapter。`Stats` 是线程安全的快照，包含活动 Session Gauge 和单调递增 Counter：
 
 ```go
 echo, err := whipecho.NewHTTPAdapter(
@@ -112,8 +92,7 @@ stats := echo.Stats()
 activeSessions.Set(float64(stats.ActiveSessions))
 ```
 
-Use `HTTPOptions.Observer` for duration histograms or real-time metrics without
-polling:
+需要 Duration Histogram 或实时指标时，可以使用 `HTTPOptions.Observer`，无需轮询：
 
 ```go
 options.Observer = whipecho.ObserverFuncs{
@@ -130,11 +109,9 @@ options.Observer = whipecho.ObserverFuncs{
 }
 ```
 
-Observer reason, stage, media, and event values are bounded enums. Do not add
-session or device IDs as metric labels. Observer callbacks may run
-concurrently and should return quickly.
+Observer 的 Reason、Stage、Media 和 Event 值均为范围有限的枚举。不要将 Session ID 或设备 ID 作为指标 Label。Observer 回调可能并发执行，应尽快返回。
 
-Bearer-token monitoring is separate from Echo session monitoring:
+Bearer Token 监控与 Echo Session 监控相互独立：
 
 ```go
 auth := tirtcxauth.BearerInterceptor(serviceName, verifier,

@@ -1,16 +1,15 @@
 # TiRTC-X Ed25519 Token
 
-WHIP tokens use Ed25519 signatures:
+WHIP Token 使用 Ed25519 签名：
 
 ```text
 v1.<payload_b64url>.<signature_b64url>
 ```
 
-- `payload_b64url` is base64url without padding over the JSON claims.
-- `signature_b64url` is base64url without padding over
-  `ed25519.Sign(private_key, []byte(payload_b64url))`.
+- `payload_b64url` 是对 JSON Claims 进行不带填充的 Base64URL 编码。
+- `signature_b64url` 是对 `ed25519.Sign(private_key, []byte(payload_b64url))` 的结果进行不带填充的 Base64URL 编码。
 
-Claims:
+Claims：
 
 ```json
 {
@@ -22,33 +21,22 @@ Claims:
 }
 ```
 
-`canonical_query` is produced by parsing the WHIP request query and re-encoding
-it with keys sorted according to standard URL query encoding.
+`canonical_query` 通过解析 WHIP 请求的 Query，再按照标准 URL Query 编码规则对参数名排序并重新编码得到。
 
-Verifier APIs may accept an empty expected device ID. In that case the signature,
-issuer, expiry, and scope are checked, while `sub` is returned in the claims
-without being compared to an external value.
+验证 API 可以接受空的预期设备 ID。此时仍会验证签名、Issuer、有效期和 Scope，但不会将 `sub` 与外部设备 ID 比较；`sub` 仍会随 Claims 返回。
 
-Language SDKs should expose key maps instead of parallel key slices:
+各语言 SDK 应提供密钥映射，而不是相互平行的密钥切片：
 
-- issuer private keys: `access_key -> private_key`
-- verifier public keys: `access_key -> public_key`
+- 签发方私钥：`access_key -> private_key`
+- 验证方公钥：`access_key -> public_key`
 
-Preferred key formats are PEM PKCS8 private keys and PEM PKIX public keys.
-Language SDKs may also support raw base64url/base64/hex Ed25519 key bytes for
-configuration systems that store keys without PEM wrapping.
+推荐使用 PEM PKCS8 私钥和 PEM PKIX 公钥。对于不使用 PEM 包装保存密钥的配置系统，各语言 SDK 也可以支持 Base64URL、Base64 或十六进制编码的原始 Ed25519 密钥。
 
-The token is a reusable delegation credential until `exp`. It has no nonce and
-the verifier performs no replay check. Protect individual connection attempts
-with the optional `nonce` field in `POST /v1/connect`; TiRTC Access rejects a
-reused request nonce. Current TiRTC device SDKs generate a fresh connect nonce
-without changing the public `TiRtcWhipConnect` API.
+Token 在 `exp` 到期前是可重复使用的长期委托凭证。Token 不包含 Nonce，验证器也不执行防重放检查。单次建连通过 `POST /v1/connect` 的可选 `nonce` 字段防止重放；TiRTC Access 会拒绝重复的请求 Nonce。当前 TiRTC 设备 SDK 会自动为每次建连生成新的 Nonce，不改变公开的 `TiRtcWhipConnect` API。
 
-## Go HTTP middleware
+## Go HTTP 中间件
 
-`BearerInterceptor` verifies the bearer token against the request's complete
-raw query. A successful verification attaches a copy of the claims to the
-request context:
+`BearerInterceptor` 使用请求的完整原始 Query 验证 Bearer Token。验证成功后，会将 Claims 的副本写入请求 Context：
 
 ```go
 handler := tirtcxauth.BearerInterceptor(serviceName, verifier)(
@@ -66,9 +54,6 @@ handler := tirtcxauth.BearerInterceptor(serviceName, verifier)(
 )
 ```
 
-`ClaimsFromContext` returns a value copy so one handler cannot mutate the
-claims observed by another handler.
+`ClaimsFromContext` 返回值副本，避免一个 Handler 修改另一个 Handler 观察到的 Claims。
 
-Apply the interceptor to WHIP POST handlers. Resource DELETE requests do not
-carry a bearer token when Location contains a cryptographically random session
-ID; possession of that Location authorizes deletion.
+只对 WHIP POST Handler 使用该拦截器。当 `Location` 包含密码学安全的随机 Session ID 时，资源 DELETE 请求不携带 Bearer Token；持有该 `Location` 即具有删除权限。

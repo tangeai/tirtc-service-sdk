@@ -1,43 +1,36 @@
 # clib
 
-`clib/` is the shared TiRTC C API layer used by language SDKs.
+`clib/` 是各语言 SDK 共用的 TiRTC C API 层。
 
-Language SDKs should depend on the public `tiRTC.h` API only. Do not expose or
-require any lower-level C headers from this repository.
+各语言 SDK 只应依赖公开的 `tiRTC.h` API，不应暴露或要求使用本仓库中更底层的 C 头文件。
 
-Current headers:
+当前头文件：
 
 - `clib/include/tirtc/tiRTC.h`
 - `clib/include/tirtc/basedef.h`
 
-The Go SDK's `internal/tirtcclib` package is a direct wrapper for this layer.
-It is an implementation detail of `pkg/tirtcx`; applications cannot import it
-directly.
+Go SDK 的 `internal/tirtcclib` 包直接封装这一层。它是 `pkg/tirtcx` 的内部实现，应用无法直接导入。
 
-## Native Libraries
+## 原生库
 
-Native library binaries are not stored in this Git repository. Download the
-required desktop SDK from:
+本 Git 仓库不保存原生库二进制文件。请从以下地址下载所需的桌面端 SDK：
 
 ```text
 https://repo-sdk.tange-ai.com/repository/tirtc-sdks/ci/linux-x86_64-desktop/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard.tgz
 ```
 
-See `clib/README.md` for installation commands. The Go SDK expects:
+安装命令见 `clib/README.md`。Go SDK 需要：
 
 - `libTiRTC.a`
-- `libwebrtc.so` (runtime dependency of the desktop TiRTC SDK)
+- `libwebrtc.so`（桌面端 TiRTC SDK 的运行时依赖）
 
-When using the desktop TiRTC SDK, deploy `libwebrtc.so` next to the service
-binary or add its directory to `LD_LIBRARY_PATH`. Static Linux builds also
-link `libdl`, which the Go wrapper configures automatically.
+使用桌面端 TiRTC SDK 时，应将 `libwebrtc.so` 与服务程序部署在同一目录，或将其目录加入 `LD_LIBRARY_PATH`。Linux 静态构建还会链接 `libdl`，Go 封装会自动配置该依赖。
 
-Build Go code against the real clib wrapper with:
+使用真实 clib 封装构建 Go 代码：
 
 ```bash
 cd go
 go build -tags tirtc_clib ./...
 ```
 
-Without the `tirtc_clib` build tag, the Go wrapper compiles as stubs so pure Go
-packages can be tested without native libraries.
+不指定 `tirtc_clib` Build Tag 时，Go 封装会编译为 Stub，使纯 Go 包可以在没有原生库的环境中测试。

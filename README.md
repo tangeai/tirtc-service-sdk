@@ -1,30 +1,27 @@
 # whip-sdk
 
-`whip-sdk` is the multilingual SDK repository for TiRTC WHIP services.
+`whip-sdk` 是用于开发 TiRTC WHIP Service 的多语言 SDK 仓库。
 
-The repository is organized around a shared C API contract and language-specific
-SDKs:
+仓库以统一的 C API 约定为基础，按语言组织 SDK：
 
-- `clib/`: shared TiRTC C headers and native library placement.
-- `go/`: Go SDK implementation. This is the first supported language.
-- `python/`: reserved for a future Python SDK.
-- `docs/`: protocol and SDK notes shared by language implementations.
-- `examples/`: language-specific examples and entry points.
+- `clib/`：存放共用的 TiRTC C 头文件和原生库。
+- `go/`：Go SDK 实现，是当前首先支持的语言。
+- `python/`：预留给后续 Python SDK。
+- `docs/`：各语言实现共用的协议和 SDK 说明。
+- `examples/`：各语言的示例与入口。
 
-## Current Status
+## 当前状态
 
-The Go SDK provides:
+Go SDK 当前提供：
 
-- Ed25519 TiRTC-X token issuing and verification.
-- A direct `tiRTC.h` wrapper layer with identifiers aligned to the C API.
-- A TiRTC `Conn` object layer for WHIP accept/connect and connection operations.
+- 基于 Ed25519 的 TiRTC-X Token 签发与验证。
+- 与 `tiRTC.h` 标识符保持一致的 C API 封装。
+- 用于 WHIP 接入、建连和连接操作的 TiRTC `Conn` 对象层。
 
-The core connection packages do not impose HTTP endpoint design. The optional
-`pkg/whipecho` provides composable POST/DELETE adapters and keeps
-their `Location` values consistent.
+核心连接包不限定 HTTP 入口的设计。可选的 `pkg/whipecho` 提供可组合的
+POST/DELETE 适配器，并保证其 `Location` 一致。
 
-The Go quick-start application and observable Echo example under `go/examples/` demonstrate
-the reusable HTTP registration, authentication, statistics, and observers.
+`go/examples/` 下的 Go 快速开始应用和可观测 Echo 示例展示了可复用的
+HTTP 注册、认证、统计和 Observer 组合方式。
 
-The Python SDK is intentionally not implemented yet; its directory is reserved
-so the repository layout remains stable when Python support is added.
+Python SDK 尚未实现。当前保留其目录，以便后续增加 Python 支持时保持仓库结构稳定。

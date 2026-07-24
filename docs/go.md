@@ -1,28 +1,25 @@
 # Go SDK
 
-The Go SDK lives under `go/` and is split into four layers:
+Go SDK 位于 `go/`，分为四层：
 
-- `internal/tirtcclib`: internal `tiRTC.h` wrappers used by `pkg/tirtcx`.
-- `pkg/tirtcxauth`: Ed25519 TiRTC-X token issuing and verification.
-- `pkg/tirtcx`: TiRTC `Conn` object and authentication-independent WHIP helpers.
-- `pkg/whipecho`: reusable Echo sessions and HTTP-handler registration.
+- `internal/tirtcclib`：供 `pkg/tirtcx` 使用的内部 `tiRTC.h` 封装。
+- `pkg/tirtcxauth`：基于 Ed25519 的 TiRTC-X Token 签发与验证。
+- `pkg/tirtcx`：TiRTC `Conn` 对象和不包含认证策略的 WHIP 辅助能力。
+- `pkg/whipecho`：可复用的 Echo Session 和 HTTP Handler 注册能力。
 
-The core connection packages do not own:
+核心连接包不负责：
 
-- HTTP endpoint design.
-- WHIP `Location` resource management.
-- `DELETE` termination semantics.
+- HTTP 入口设计；
+- WHIP `Location` 资源管理；
+- `DELETE` 终止语义。
 
-Those remain application-server responsibilities unless an optional
-higher-level capability such as `pkg/whipecho` explicitly provides them.
+这些职责由应用服务端承担，除非使用 `pkg/whipecho` 等明确提供相应能力的可选高层组件。
 
-The repository includes `go/examples/quick-start` for minimal integration and
-`go/examples/observable-service` for Stats, Observer, metrics, and structured
-logging.
+仓库包含用于最小接入的 `go/examples/quick-start`，以及展示 Stats、Observer、Metrics 和结构化日志的 `go/examples/observable-service`。
 
-## clib Mapping
+## clib 映射
 
-The lower layer intentionally keeps C-style names:
+底层封装有意保留 C 风格名称：
 
 - `TiRtcInit`
 - `TiRtcUninit`
@@ -35,10 +32,7 @@ The lower layer intentionally keeps C-style names:
 - `TiRtcSendVideoStream`
 - `TiRtcSendCommand`
 
-`tirtcx.WhipAcceptor` starts the lower-level WHIP acceptance flow without
-imposing an authentication policy. HTTP services should authenticate the
-request with `tirtcxauth.BearerInterceptor` before invoking it. The acceptance
-path is built on top of:
+`tirtcx.WhipAcceptor` 启动底层 WHIP Accept 流程，不附加认证策略。HTTP 服务应先使用 `tirtcxauth.BearerInterceptor` 验证请求，再调用该接口。Accept 流程基于：
 
 ```c
 int TiRtcWhipAccept(const char *offer, int offer_len,
@@ -48,31 +42,31 @@ int TiRtcWhipAccept(const char *offer, int offer_len,
                     void *user);
 ```
 
-## Conn Usage
+## Conn 使用方式
 
 ```go
-acceptor := tirtcx.NewWhipAcceptor("203.0.113.10") // candidate is optional
+acceptor := tirtcx.NewWhipAcceptor("203.0.113.10") // candidate 可选
 
 _ = tirtcx.Init()
 defer tirtcx.Uninit()
 _ = tirtcx.Start()
 defer tirtcx.Stop()
 
-// The surrounding HTTP handler has already passed BearerInterceptor.
+// 外层 HTTP Handler 已通过 BearerInterceptor。
 acceptContext, cancelAccept := context.WithTimeout(r.Context(), 10*time.Second)
 defer cancelAccept()
 session, err := acceptor.WhipAccept(acceptContext, offerSDP, tirtcx.ConnEventOptions{
     CommandBuffer:      16,
     DisconnectedBuffer: 4,
     SubscribeVideoHandler: func(streamID uint8) int {
-        return 0 // Return the TiRTC subscription result synchronously.
+        return 0 // 同步返回 TiRTC 订阅结果。
     },
 })
 if err != nil {
-    // handle acceptance error
+    // 处理 Accept 错误
 }
 
-// Return session.AnswerSDP() according to the application's HTTP design.
+// 按照应用的 HTTP 设计返回 session.AnswerSDP()。
 answerSDP := session.AnswerSDP()
 _ = answerSDP
 
@@ -80,38 +74,29 @@ connectContext, cancelConnect := context.WithTimeout(context.Background(), 30*ti
 defer cancelConnect()
 conn, err := session.WaitConn(connectContext)
 if err != nil {
-    // handle connection error
+    // 处理建连错误
 }
 defer session.Close()
 
 events := conn.Events()
 command := <-events.Command
-// Handle command.Cmd and command.Data.
+// 处理 command.Cmd 和 command.Data。
 
 _ = conn.SendCommand(0x10000, []byte("hello"))
 
 <-conn.Done()
 if err := conn.Err(); err != nil {
-    // The connection ended with an error.
+    // 连接因错误结束。
 }
 ```
 
-`WhipSession` owns the pending or connected `Conn`. `WaitConn` is safe for
-concurrent and repeated calls. Each waiter supplies its own context; canceling
-one waiter does not close the session. The context passed to `WhipAccept`
-controls only the synchronous SDP-answer phase, so an HTTP handler can pass its
-request context without canceling connection establishment after returning the
-answer.
+`WhipSession` 持有等待建连或已经建连的 `Conn`。`WaitConn` 支持并发和重复调用，每个调用方使用自己的 Context；取消其中一个等待不会关闭 Session。传给 `WhipAccept` 的 Context 只控制同步生成 SDP Answer 的阶段，因此 HTTP Handler 可以传入请求 Context，返回 Answer 后不会因此取消后续建连。
 
-Applications own the HTTP resource ID, Location, registry, and DELETE policy;
-DELETE should remove the application resource and call `session.Close()`.
-With a cryptographically random resource ID, DELETE does not need a bearer
-token; possession of the Location is the deletion capability.
-Subscription decisions use `SubscribeVideoHandler` and
-`SubscribeAudioHandler`, which return directly to the native callback and
-cannot be left waiting on a response channel.
+应用负责 HTTP Resource ID、`Location`、Registry 和 DELETE 策略。DELETE 应删除应用资源并调用 `session.Close()`。Resource ID 使用密码学安全的随机值时，DELETE 不需要 Bearer Token；持有 `Location` 即具有删除权限。
 
-## Example Service
+订阅决策通过 `SubscribeVideoHandler` 和 `SubscribeAudioHandler` 完成。它们直接从原生回调返回结果，不能等待 Response Channel。
+
+## 示例服务
 
 ```bash
 cd go/examples/quick-start
@@ -121,9 +106,6 @@ go run -tags tirtc_clib . \
   -service quick-start
 ```
 
-The quick-start example implements a normal WHIP business session that sends
-synthetic PCM audio and JPEG video. The same `POST /whip` handler also has the
-Echo capability, with Echo selection kept inside the SDK.
+快速开始示例实现了一个普通 WHIP 业务 Session，向设备发送生成的 PCM 音频和 JPEG 视频。同一个 `POST /whip` Handler 也提供 Echo 能力，Echo 选择逻辑保留在 SDK 内部。
 
-See `examples/observable-service` for `slog`, `HTTPAdapter.Stats()`, Echo and
-authentication observers, and a sample `/metrics` endpoint.
+`examples/observable-service` 展示了 `slog`、`HTTPAdapter.Stats()`、Echo 和认证 Observer，以及示例 `/metrics` 入口。
