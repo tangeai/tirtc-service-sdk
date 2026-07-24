@@ -23,10 +23,14 @@ func main() {
 		log.Fatal(err)
 	}
 	mux := http.NewServeMux()
-	_, err = whipecho.RegisterHTTPHandlers(mux, "/whip", whipecho.HTTPOptions{
-		Candidate: *candidate,
-		Enabled:   true,
-	}, tirtcxauth.BearerInterceptor(*serviceName, verifier))
+	acceptor := tirtcx.NewWhipAcceptor(*candidate)
+	_, err = whipecho.RegisterHTTPHandlers(
+		mux,
+		"/whip",
+		acceptor,
+		whipecho.HTTPOptions{Enabled: true},
+		tirtcxauth.BearerInterceptor(*serviceName, verifier),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}

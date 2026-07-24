@@ -14,13 +14,14 @@ the ready-to-use handler and mount it. Authentication is a separate
 interceptor:
 
 ```go
+acceptor := tirtcx.NewWhipAcceptor(candidate)
 _, err := whipecho.RegisterHTTPHandlers(
     mux,
     "/custom/whip",
+    acceptor,
     whipecho.HTTPOptions{
-    Candidate:   candidate,
-    Enabled:     true,
-    RequireMode: true,
+        Enabled:     true,
+        RequireMode: true,
     },
     tirtcxauth.BearerInterceptor(serviceName, verifier),
 )
@@ -79,6 +80,7 @@ thread-safe snapshot with an active-session gauge and monotonic counters:
 echo, err := whipecho.RegisterHTTPHandlers(
     mux,
     "/whip",
+    acceptor,
     options,
     auth,
 )

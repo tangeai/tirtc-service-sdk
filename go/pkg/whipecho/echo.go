@@ -47,10 +47,13 @@ type EchoService interface {
 	Delete(context.Context, string) error
 }
 
+// Acceptor accepts an SDP offer without imposing an authentication policy.
+type Acceptor interface {
+	WhipAccept([]byte, tirtcx.ConnEventOptions) (*tirtcx.WhipAcceptResult, error)
+}
+
 type Options struct {
-	Acceptor interface {
-		WhipAccept([]byte, tirtcx.ConnEventOptions) (*tirtcx.WhipAcceptResult, error)
-	}
+	Acceptor       Acceptor
 	Enabled        bool
 	RequireMode    bool
 	LocationPrefix string

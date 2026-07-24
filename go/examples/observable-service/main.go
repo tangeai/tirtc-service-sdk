@@ -64,14 +64,15 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	acceptor := tirtcx.NewWhipAcceptor(*candidate)
 	echo, err := whipecho.RegisterHTTPHandlers(
 		mux,
 		"/whip",
+		acceptor,
 		whipecho.HTTPOptions{
-			Candidate: *candidate,
-			Enabled:   true,
-			Logger:    logger,
-			Observer:  echoObserver,
+			Enabled:  true,
+			Logger:   logger,
+			Observer: echoObserver,
 		},
 		tirtcxauth.BearerInterceptor(*serviceName, verifier, authObserver),
 	)

@@ -4,7 +4,7 @@ The Go SDK lives under `go/` and is split into four layers:
 
 - `internal/tirtcclib`: internal `tiRTC.h` wrappers used by `pkg/tirtcx`.
 - `pkg/tirtcxauth`: Ed25519 TiRTC-X token issuing and verification.
-- `pkg/tirtcx`: TiRTC `Conn` object and TiRTC-X authenticated WHIP helpers.
+- `pkg/tirtcx`: TiRTC `Conn` object and authentication-independent WHIP helpers.
 - `pkg/whipecho`: reusable Echo sessions and HTTP-handler registration.
 
 The core connection packages do not own:
@@ -35,9 +35,10 @@ The lower layer intentionally keeps C-style names:
 - `TiRtcSendVideoStream`
 - `TiRtcSendCommand`
 
-`tirtcx.WhipServer` keeps token verification and WHIP acceptance separate:
-call `Auth` with the raw query and bearer token, then call `WhipAccept` with
-the offer SDP. The acceptance path is built on top of:
+`tirtcx.WhipAcceptor` starts the lower-level WHIP acceptance flow without
+imposing an authentication policy. HTTP services should authenticate the
+request with `tirtcxauth.BearerInterceptor` before invoking it. The acceptance
+path is built on top of:
 
 ```c
 int TiRtcWhipAccept(const char *offer, int offer_len,
@@ -50,26 +51,15 @@ int TiRtcWhipAccept(const char *offer, int offer_len,
 ## Conn Usage
 
 ```go
-server, err := tirtcx.NewWhipServer(tirtcx.Options{
-    Service:   "wxvoip",
-    Verifier:  verifier,
-    Candidate: "203.0.113.10", // optional
-})
-if err != nil {
-    // handle config error
-}
+acceptor := tirtcx.NewWhipAcceptor("203.0.113.10") // candidate is optional
 
 _ = tirtcx.Init()
 defer tirtcx.Uninit()
 _ = tirtcx.Start()
 defer tirtcx.Stop()
 
-deviceID, err := server.Auth(rawQuery, bearerToken)
-if err != nil {
-    // return an authentication error
-}
-
-result, err := server.WhipAccept(offerSDP, tirtcx.ConnEventOptions{
+// The surrounding HTTP handler has already passed BearerInterceptor.
+result, err := acceptor.WhipAccept(offerSDP, tirtcx.ConnEventOptions{
     CommandBuffer:      16,
     DisconnectedBuffer: 4,
 })
@@ -80,7 +70,6 @@ if err != nil {
 // Return result.AnswerSDP according to the application's HTTP design.
 answerSDP := result.AnswerSDP
 _ = answerSDP
-_ = deviceID
 
 conn, err := result.WaitConn(30 * time.Second)
 if err != nil {

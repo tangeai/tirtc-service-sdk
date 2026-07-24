@@ -10,15 +10,12 @@ import (
 	"path"
 	"strings"
 	"time"
-
-	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/pkg/tirtcx"
 )
 
 const defaultMaxSDPBytes = 1 << 20
 
 // HTTPOptions configures the Echo HTTP handlers.
 type HTTPOptions struct {
-	Candidate   string
 	Enabled     bool
 	RequireMode bool
 	MaxSDPBytes int64
@@ -40,6 +37,7 @@ type HTTPOptions struct {
 func RegisterHTTPHandlers(
 	mux *http.ServeMux,
 	basePath string,
+	acceptor Acceptor,
 	opts HTTPOptions,
 	interceptors ...func(http.Handler) http.Handler,
 ) (*Service, error) {
@@ -56,7 +54,7 @@ func RegisterHTTPHandlers(
 	}
 
 	service, err := New(Options{
-		Acceptor:       tirtcx.NewWhipAcceptor(opts.Candidate),
+		Acceptor:       acceptor,
 		Enabled:        opts.Enabled,
 		RequireMode:    opts.RequireMode,
 		LocationPrefix: basePath + "/resource",

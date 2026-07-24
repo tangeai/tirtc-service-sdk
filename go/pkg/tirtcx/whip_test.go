@@ -1,128 +1,18 @@
 package tirtcx
 
 import (
-	"crypto/ed25519"
-	"encoding/base64"
 	"errors"
 	"testing"
-	"time"
 	"unsafe"
 
 	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/internal/tirtcclib"
-	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/pkg/tirtcxauth"
 )
 
-func TestAuthVerifiesQueryAndTokenBeforeAccept(t *testing.T) {
-	publicKey, privateKey, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	issuer, err := tirtcxauth.NewEd25519TokenIssuer(map[string]string{
-		"ak1": base64.RawURLEncoding.EncodeToString(privateKey),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{
-		"ak1": base64.RawURLEncoding.EncodeToString(publicKey),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	server, err := NewWhipServer(Options{
-		Service:  "whip-echo-svc",
-		Verifier: verifier,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	token, err := issuer.Issue("whip-echo-svc", "ak1", "dev-1", "device_id=dev-1&a=2", time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := server.Auth("device_id=dev-1&a=3", token); err == nil {
-		t.Fatal("Auth accepted mismatched query")
-	}
-}
-
-func TestWhipAcceptCallsClibAfterValidToken(t *testing.T) {
-	publicKey, privateKey, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	issuer, err := tirtcxauth.NewEd25519TokenIssuer(map[string]string{
-		"ak1": base64.RawURLEncoding.EncodeToString(privateKey),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{
-		"ak1": base64.RawURLEncoding.EncodeToString(publicKey),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	server, err := NewWhipServer(Options{
-		Service:  "whip-echo-svc",
-		Verifier: verifier,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	token, err := issuer.Issue("whip-echo-svc", "ak1", "dev-1", "device_id=dev-1", time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-	deviceID, err := server.Auth("device_id=dev-1", token)
-	if err != nil {
-		t.Fatalf("Auth: %v", err)
-	}
-	_, err = server.WhipAccept([]byte("v=0\r\n"), ConnEventOptions{})
+func TestWhipAcceptCallsClib(t *testing.T) {
+	acceptor := NewWhipAcceptor("")
+	_, err := acceptor.WhipAccept([]byte("v=0\r\n"), ConnEventOptions{})
 	if !errors.Is(err, tirtcclib.ErrUnavailable) {
 		t.Fatalf("WhipAccept err = %v, want ErrUnavailable from clib stub", err)
-	}
-	if deviceID != "dev-1" {
-		t.Fatalf("deviceID = %q, want dev-1", deviceID)
-	}
-}
-
-func TestAuthReturnsDeviceID(t *testing.T) {
-	publicKey, privateKey, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	issuer, err := tirtcxauth.NewEd25519TokenIssuer(map[string]string{
-		"ak1": base64.RawURLEncoding.EncodeToString(privateKey),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{
-		"ak1": base64.RawURLEncoding.EncodeToString(publicKey),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	server, err := NewWhipServer(Options{
-		Service:  "whip-echo-svc",
-		Verifier: verifier,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	token, err := issuer.Issue("whip-echo-svc", "ak1", "dev-1", "device_id=dev-1", time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-	deviceID, err := server.Auth("device_id=dev-1", token)
-	if err != nil {
-		t.Fatalf("Auth: %v", err)
-	}
-	if deviceID != "dev-1" {
-		t.Fatalf("deviceID = %q, want dev-1", deviceID)
 	}
 }
 
@@ -139,8 +29,8 @@ func TestWhipAcceptCreatesConnWithChannels(t *testing.T) {
 	}
 	defer func() { acceptWHIPFunc = oldAcceptWHIP }()
 
-	server := &WhipServer{}
-	if _, err := server.WhipAccept([]byte("offer"), ConnEventOptions{
+	acceptor := NewWhipAcceptor("")
+	if _, err := acceptor.WhipAccept([]byte("offer"), ConnEventOptions{
 		AudioBuffer: 1,
 	}); err != nil {
 		t.Fatalf("WhipAccept: %v", err)
@@ -159,8 +49,8 @@ func TestWhipAcceptReturnsAnswer(t *testing.T) {
 	}
 	defer func() { acceptWHIPFunc = oldAcceptWHIP }()
 
-	server := &WhipServer{}
-	result, err := server.WhipAccept([]byte("offer"), ConnEventOptions{})
+	acceptor := NewWhipAcceptor("")
+	result, err := acceptor.WhipAccept([]byte("offer"), ConnEventOptions{})
 	if err != nil {
 		t.Fatalf("WhipAccept: %v", err)
 	}
@@ -307,22 +197,9 @@ func TestOnDisconnectedClosesEventChannels(t *testing.T) {
 	}
 }
 
-func TestNewWhipServerRejectsInvalidConfig(t *testing.T) {
-	if _, err := NewWhipServer(Options{}); !errors.Is(err, ErrInvalidConfig) {
-		t.Fatalf("NewWhipServer err = %v, want ErrInvalidConfig", err)
-	}
-}
-
-func TestAuthRejectsNilWhipServer(t *testing.T) {
-	var server *WhipServer
-	if _, err := server.Auth("", ""); !errors.Is(err, ErrNilWhipServer) {
-		t.Fatalf("Auth err = %v, want ErrNilWhipServer", err)
-	}
-}
-
-func TestWhipAcceptRejectsNilWhipServer(t *testing.T) {
-	var server *WhipServer
-	if _, err := server.WhipAccept(nil, ConnEventOptions{}); !errors.Is(err, ErrNilWhipServer) {
-		t.Fatalf("WhipAccept err = %v, want ErrNilWhipServer", err)
+func TestWhipAcceptRejectsNilAcceptor(t *testing.T) {
+	var acceptor *WhipAcceptor
+	if _, err := acceptor.WhipAccept(nil, ConnEventOptions{}); !errors.Is(err, ErrNilWhipAcceptor) {
+		t.Fatalf("WhipAccept err = %v, want ErrNilWhipAcceptor", err)
 	}
 }

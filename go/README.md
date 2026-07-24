@@ -6,7 +6,7 @@ Go module for TiRTC WHIP service implementations.
 
 - `pkg/tirtcxauth`: Ed25519 TiRTC-X token issuing and verification.
 - `internal/tirtcclib`: internal Go wrappers for `clib/include/tirtc/tiRTC.h`.
-- `pkg/tirtcx`: TiRTC `Conn` object and TiRTC-X authenticated WHIP helpers.
+- `pkg/tirtcx`: TiRTC `Conn` object and authentication-independent WHIP helpers.
 - `pkg/whipecho`: embeddable diagnostic audio/video/command echo sessions.
 
 `internal/tirtcclib` is intentionally a thin implementation layer.
@@ -70,26 +70,15 @@ claims, err := verifier.Verify("wxvoip", "device-1", "a=2&b=1", token)
 ## TiRTC-X Conn
 
 ```go
-server, err := tirtcx.NewWhipServer(tirtcx.Options{
-    Service:   "wxvoip",
-    Verifier:  verifier,
-    Candidate: "203.0.113.10", // optional
-})
-if err != nil {
-    // handle config error
-}
+acceptor := tirtcx.NewWhipAcceptor("203.0.113.10") // candidate is optional
 
 _ = tirtcx.Init()
 defer tirtcx.Uninit()
 _ = tirtcx.Start()
 defer tirtcx.Stop()
 
-deviceID, err := server.Auth("a=2&b=1", token)
-if err != nil {
-    // return an authentication error
-}
-
-result, err := server.WhipAccept(offerSDP, tirtcx.ConnEventOptions{
+// The surrounding HTTP handler has already passed BearerInterceptor.
+result, err := acceptor.WhipAccept(offerSDP, tirtcx.ConnEventOptions{
     AudioBuffer:        16,
     DisconnectedBuffer: 4,
 })
@@ -110,11 +99,11 @@ audioFrame := <-conn.Events().Audio
 
 _ = audioFrame
 _ = answerSDP
-_ = deviceID
 ```
 
-`pkg/tirtcx` wraps TiRTC connection operations and verifies TiRTC-X query/token
-for WHIP accept. It does not provide an HTTP handler.
+`pkg/tirtcx` wraps TiRTC connection operations without choosing an
+authentication policy or providing an HTTP handler. HTTP services should apply
+`tirtcxauth.BearerInterceptor` before calling `WhipAcceptor.WhipAccept`.
 
 ## Example Service
 
