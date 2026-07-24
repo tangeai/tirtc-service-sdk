@@ -6,6 +6,26 @@ running the examples.
 The examples share `go/examples/go.mod`, so their application dependencies do
 not become dependencies of the SDK module.
 
+## Connection parameters
+
+`connection-params` generates a `peer_id` and a signed delegation token for an
+authorized device. It uses only the public `tirtcxauth` package and does not
+require the native TiRTC libraries.
+
+```bash
+cd go/examples
+go run ./connection-params \
+  -service quick-start \
+  -access-key "$TIRTC_ACCESS_KEY" \
+  -private-key "$TIRTC_PRIVATE_KEY" \
+  -device-id your_device_id \
+  -query 'mode=echo'
+```
+
+The command writes `peer_id` and `token` as JSON. Use it for development and
+integration testing. A production business server must authorize the device
+before issuing the same parameters.
+
 ## Quick start
 
 `quick-start` is a small but complete WHIP application. A normal device
