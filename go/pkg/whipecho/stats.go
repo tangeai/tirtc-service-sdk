@@ -7,25 +7,35 @@ import (
 	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/pkg/tirtcx"
 )
 
+// CloseReason describes why an Echo session ended.
 type CloseReason string
 
 const (
-	CloseReasonDeleted            CloseReason = "deleted"
-	CloseReasonDisconnected       CloseReason = "disconnected"
-	CloseReasonConnectionError    CloseReason = "connection_error"
-	CloseReasonConnectionFailed   CloseReason = "connection_failed"
-	CloseReasonEventChannelClosed CloseReason = "event_channel_closed"
+	CloseReasonDeleted          CloseReason = "deleted"
+	CloseReasonDisconnected     CloseReason = "disconnected"
+	CloseReasonConnectionError  CloseReason = "connection_error"
+	CloseReasonConnectionFailed CloseReason = "connection_failed"
+	CloseReasonShutdown         CloseReason = "shutdown"
 )
 
+// AcceptStage identifies a synchronous session acceptance stage.
 type AcceptStage string
 
 const (
 	AcceptStageValidate  AcceptStage = "validate"
 	AcceptStageWHIP      AcceptStage = "whip_accept"
 	AcceptStageSessionID AcceptStage = "session_id"
-	AcceptStageConnect   AcceptStage = "connect"
 )
 
+// ConnectFailureReason describes an asynchronous connection failure.
+type ConnectFailureReason string
+
+const (
+	ConnectFailureTimeout ConnectFailureReason = "timeout"
+	ConnectFailureError   ConnectFailureReason = "error"
+)
+
+// MediaType identifies an Echo media category.
 type MediaType string
 
 const (
@@ -34,6 +44,7 @@ const (
 	MediaTypeCommand MediaType = "command"
 )
 
+// EventType identifies a connection event category.
 type EventType string
 
 const (
@@ -44,9 +55,7 @@ const (
 	EventTypeError            EventType = "error"
 	EventTypeDisconnected     EventType = "disconnected"
 	EventTypeRequestKeyFrame  EventType = "request_key_frame"
-	EventTypeSubscribeVideo   EventType = "subscribe_video"
 	EventTypeUnsubscribeVideo EventType = "unsubscribe_video"
-	EventTypeSubscribeAudio   EventType = "subscribe_audio"
 	EventTypeUnsubscribeAudio EventType = "unsubscribe_audio"
 )
 
@@ -57,6 +66,7 @@ type Observer interface {
 	SessionConnected(time.Duration)
 	SessionClosed(CloseReason, time.Duration)
 	AcceptFailed(AcceptStage)
+	ConnectFailed(ConnectFailureReason)
 	AudioEchoed(bytes int)
 	VideoEchoed(bytes int)
 	SendFailed(MediaType)
@@ -69,6 +79,7 @@ type ObserverFuncs struct {
 	OnSessionConnected func(time.Duration)
 	OnSessionClosed    func(CloseReason, time.Duration)
 	OnAcceptFailed     func(AcceptStage)
+	OnConnectFailed    func(ConnectFailureReason)
 	OnAudioEchoed      func(bytes int)
 	OnVideoEchoed      func(bytes int)
 	OnSendFailed       func(MediaType)
@@ -93,6 +104,11 @@ func (o ObserverFuncs) SessionClosed(reason CloseReason, duration time.Duration)
 func (o ObserverFuncs) AcceptFailed(stage AcceptStage) {
 	if o.OnAcceptFailed != nil {
 		o.OnAcceptFailed(stage)
+	}
+}
+func (o ObserverFuncs) ConnectFailed(reason ConnectFailureReason) {
+	if o.OnConnectFailed != nil {
+		o.OnConnectFailed(reason)
 	}
 }
 func (o ObserverFuncs) AudioEchoed(bytes int) {
@@ -122,17 +138,19 @@ func (noopObserver) SessionAccepted()                         {}
 func (noopObserver) SessionConnected(time.Duration)           {}
 func (noopObserver) SessionClosed(CloseReason, time.Duration) {}
 func (noopObserver) AcceptFailed(AcceptStage)                 {}
+func (noopObserver) ConnectFailed(ConnectFailureReason)       {}
 func (noopObserver) AudioEchoed(int)                          {}
 func (noopObserver) VideoEchoed(int)                          {}
 func (noopObserver) SendFailed(MediaType)                     {}
 func (noopObserver) EventsDropped(EventType, uint64)          {}
 
 // Stats is a point-in-time, concurrency-safe snapshot. Counters are monotonic
-// for the lifetime of a Service; ActiveSessions is a gauge.
+// for the lifetime of a SessionManager; ActiveSessions is a gauge.
 type Stats struct {
 	ActiveSessions      uint64
 	AcceptedTotal       uint64
 	AcceptFailedTotal   uint64
+	ConnectFailedTotal  uint64
 	ConnectTimeoutTotal uint64
 	DeletedTotal        uint64
 
@@ -150,6 +168,7 @@ type statsRecorder struct {
 	activeSessions      atomic.Uint64
 	acceptedTotal       atomic.Uint64
 	acceptFailedTotal   atomic.Uint64
+	connectFailedTotal  atomic.Uint64
 	connectTimeoutTotal atomic.Uint64
 	deletedTotal        atomic.Uint64
 	audioFramesTotal    atomic.Uint64
@@ -159,11 +178,11 @@ type statsRecorder struct {
 	sendFailedTotal     atomic.Uint64
 	droppedEventsTotal  atomic.Uint64
 
-	closedDeleted            atomic.Uint64
-	closedDisconnected       atomic.Uint64
-	closedConnectionError    atomic.Uint64
-	closedConnectionFailed   atomic.Uint64
-	closedEventChannelClosed atomic.Uint64
+	closedDeleted          atomic.Uint64
+	closedDisconnected     atomic.Uint64
+	closedConnectionError  atomic.Uint64
+	closedConnectionFailed atomic.Uint64
+	closedShutdown         atomic.Uint64
 }
 
 func (r *statsRecorder) snapshot() Stats {
@@ -171,6 +190,7 @@ func (r *statsRecorder) snapshot() Stats {
 		ActiveSessions:      r.activeSessions.Load(),
 		AcceptedTotal:       r.acceptedTotal.Load(),
 		AcceptFailedTotal:   r.acceptFailedTotal.Load(),
+		ConnectFailedTotal:  r.connectFailedTotal.Load(),
 		ConnectTimeoutTotal: r.connectTimeoutTotal.Load(),
 		DeletedTotal:        r.deletedTotal.Load(),
 		AudioFramesTotal:    r.audioFramesTotal.Load(),
@@ -180,11 +200,11 @@ func (r *statsRecorder) snapshot() Stats {
 		SendFailedTotal:     r.sendFailedTotal.Load(),
 		DroppedEventsTotal:  r.droppedEventsTotal.Load(),
 		ClosedTotal: map[CloseReason]uint64{
-			CloseReasonDeleted:            r.closedDeleted.Load(),
-			CloseReasonDisconnected:       r.closedDisconnected.Load(),
-			CloseReasonConnectionError:    r.closedConnectionError.Load(),
-			CloseReasonConnectionFailed:   r.closedConnectionFailed.Load(),
-			CloseReasonEventChannelClosed: r.closedEventChannelClosed.Load(),
+			CloseReasonDeleted:          r.closedDeleted.Load(),
+			CloseReasonDisconnected:     r.closedDisconnected.Load(),
+			CloseReasonConnectionError:  r.closedConnectionError.Load(),
+			CloseReasonConnectionFailed: r.closedConnectionFailed.Load(),
+			CloseReasonShutdown:         r.closedShutdown.Load(),
 		},
 	}
 }
@@ -199,8 +219,8 @@ func (r *statsRecorder) recordClose(reason CloseReason) {
 		r.closedConnectionError.Add(1)
 	case CloseReasonConnectionFailed:
 		r.closedConnectionFailed.Add(1)
-	case CloseReasonEventChannelClosed:
-		r.closedEventChannelClosed.Add(1)
+	case CloseReasonShutdown:
+		r.closedShutdown.Add(1)
 	}
 }
 
@@ -216,9 +236,7 @@ func (r *statsRecorder) recordDropped(observer Observer, stats tirtcx.EventStats
 		{EventTypeError, stats.ErrorDropped},
 		{EventTypeDisconnected, stats.DisconnectedDropped},
 		{EventTypeRequestKeyFrame, stats.RequestKeyFrameDropped},
-		{EventTypeSubscribeVideo, stats.SubscribeVideoDropped},
 		{EventTypeUnsubscribeVideo, stats.UnsubscribeVideoDropped},
-		{EventTypeSubscribeAudio, stats.SubscribeAudioDropped},
 		{EventTypeUnsubscribeAudio, stats.UnsubscribeAudioDropped},
 	}
 	for _, item := range dropped {

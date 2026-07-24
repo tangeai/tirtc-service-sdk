@@ -14,9 +14,11 @@ func callbacks() *tirtcclib.Callbacks {
 	return &tirtcclib.Callbacks{
 		OnConnError: func(hconn tirtcclib.ConnHandle, errorCode int) {
 			if conn := lookupConn(hconn); conn != nil {
-				if sendToChan(conn.errorCh, tirtcclib.ErrorFromCode(errorCode)) {
+				err := tirtcclib.ErrorFromCode(errorCode)
+				if sendToChan(conn.errorCh, err) {
 					conn.eventStats.errorDropped.Add(1)
 				}
+				conn.finish(err)
 			}
 		},
 		OnDisconnected: func(hconn tirtcclib.ConnHandle) {
@@ -25,6 +27,9 @@ func callbacks() *tirtcclib.Callbacks {
 					conn.eventStats.disconnectedDropped.Add(1)
 				}
 				connRegistry.Delete(hconn)
+				conn.finish(nil)
+				// TiRTC guarantees callbacks for the same connection are
+				// serialized, so no media callback can race these closes.
 				conn.closeEventChannels()
 				return
 			}
@@ -67,11 +72,7 @@ func callbacks() *tirtcclib.Callbacks {
 		},
 		OnSubscribeVideo: func(hconn tirtcclib.ConnHandle, streamID uint8) int {
 			if conn := lookupConn(hconn); conn != nil {
-				result, dropped := sendSubscribeEvent(conn.subscribeVideoCh, streamID)
-				if dropped {
-					conn.eventStats.subscribeVideoDropped.Add(1)
-				}
-				return result
+				return callSubscribeHandler(conn.subscribeVideo, streamID)
 			}
 			return 0
 		},
@@ -84,11 +85,7 @@ func callbacks() *tirtcclib.Callbacks {
 		},
 		OnSubscribeAudio: func(hconn tirtcclib.ConnHandle, streamID uint8) int {
 			if conn := lookupConn(hconn); conn != nil {
-				result, dropped := sendSubscribeEvent(conn.subscribeAudioCh, streamID)
-				if dropped {
-					conn.eventStats.subscribeAudioDropped.Add(1)
-				}
-				return result
+				return callSubscribeHandler(conn.subscribeAudio, streamID)
 			}
 			return 0
 		},
@@ -100,6 +97,18 @@ func callbacks() *tirtcclib.Callbacks {
 			}
 		},
 	}
+}
+
+func callSubscribeHandler(handler func(uint8) int, streamID uint8) (result int) {
+	if handler == nil {
+		return 0
+	}
+	defer func() {
+		if recover() != nil {
+			result = 0
+		}
+	}()
+	return handler(streamID)
 }
 
 func sendToChan[T any](ch chan T, event T) (dropped bool) {
@@ -114,20 +123,6 @@ func sendToChan[T any](ch chan T, event T) (dropped bool) {
 	}
 }
 
-func sendSubscribeEvent(ch chan SubscribeEvent, streamID uint8) (resultCode int, dropped bool) {
-	if ch == nil {
-		return 0, false
-	}
-	result := make(chan int, 1)
-	event := SubscribeEvent{StreamID: streamID, Result: result}
-	select {
-	case ch <- event:
-		return <-result, false
-	default:
-		return 0, true
-	}
-}
-
 func bindConnHandle(conn *Conn, hconn tirtcclib.ConnHandle) (*Conn, bool) {
 	if conn == nil || hconn == nil {
 		return nil, false
@@ -138,17 +133,6 @@ func bindConnHandle(conn *Conn, hconn tirtcclib.ConnHandle) (*Conn, bool) {
 		return actual.(*Conn), false
 	}
 	return conn, true
-}
-
-func registerConn(hconn tirtcclib.ConnHandle) *Conn {
-	if hconn == nil {
-		return nil
-	}
-	if val, ok := connRegistry.Load(hconn); ok {
-		return val.(*Conn)
-	}
-	conn, _ := bindConnHandle(newConn("", ConnEventOptions{}), hconn)
-	return conn
 }
 
 func lookupConn(hconn tirtcclib.ConnHandle) *Conn {

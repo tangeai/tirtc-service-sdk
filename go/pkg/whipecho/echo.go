@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/url"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -19,66 +19,74 @@ import (
 )
 
 const (
-	ModeQueryKey = "_tg_mode"
-	ModeEcho     = "echo"
-
-	CmdTimeSyncRequest  uint32 = 0x2010
+	// CmdTimeSyncRequest requests an Echo server timestamp.
+	CmdTimeSyncRequest uint32 = 0x2010
+	// CmdTimeSyncResponse returns an Echo server timestamp.
 	CmdTimeSyncResponse uint32 = 0x2011
 )
 
 var (
-	ErrBadRequest = errors.New("whipecho: bad request")
-	ErrDisabled   = errors.New("whipecho: disabled")
+	// ErrInvalidArgument indicates invalid caller input or configuration.
+	ErrInvalidArgument = errors.New("whipecho: invalid argument")
+	// ErrClosed indicates that the Echo session manager is shutting down.
+	ErrClosed = errors.New("whipecho: session manager closed")
 )
 
-type EchoRequest struct {
+// AcceptRequest contains the SDP offer for a new Echo session.
+type AcceptRequest struct {
 	OfferSDP []byte
-	RawQuery string
 }
 
-type EchoResult struct {
+// AcceptResult contains the SDP answer and resource identity for an Echo session.
+type AcceptResult struct {
 	SessionID string
 	AnswerSDP []byte
 	Location  string
 }
 
-type EchoService interface {
-	Accept(context.Context, EchoRequest) (*EchoResult, error)
+type echoSessionManager interface {
+	Accept(context.Context, AcceptRequest) (*AcceptResult, error)
 	Delete(context.Context, string) error
 }
 
 // Acceptor accepts an SDP offer without imposing an authentication policy.
 type Acceptor interface {
-	WhipAccept([]byte, tirtcx.ConnEventOptions) (*tirtcx.WhipAcceptResult, error)
+	WhipAccept(context.Context, []byte, tirtcx.ConnEventOptions) (*tirtcx.WhipSession, error)
 }
 
+// Options configures Echo session behavior and observability.
 type Options struct {
-	Acceptor       Acceptor
-	Enabled        bool
-	RequireMode    bool
-	LocationPrefix string
-	ConnTimeout    time.Duration
-	Logger         *slog.Logger
-	Observer       Observer
-	stats          *statsRecorder
+	ConnTimeout time.Duration
+	Logger      *slog.Logger
+	Observer    Observer
+	stats       *statsRecorder
 }
 
-type Service struct {
-	opts  Options
-	stats *statsRecorder
+// SessionManager owns Echo sessions and their diagnostic lifecycle.
+type SessionManager struct {
+	acceptor       Acceptor
+	locationPrefix string
+	opts           Options
+	stats          *statsRecorder
 
 	mu       sync.Mutex
 	sessions map[string]*session
+	closed   bool
+	wg       sync.WaitGroup
 }
 
-func New(opts Options) (*Service, error) {
-	if opts.Acceptor == nil {
-		return nil, fmt.Errorf("%w: acceptor is nil", ErrBadRequest)
+// NewSessionManager creates a stateful Echo session manager.
+func NewSessionManager(
+	acceptor Acceptor,
+	locationPrefix string,
+	opts Options,
+) (*SessionManager, error) {
+	if acceptor == nil {
+		return nil, fmt.Errorf("%w: acceptor is nil", ErrInvalidArgument)
 	}
-	if opts.LocationPrefix == "" {
-		opts.LocationPrefix = "/whip/echo/resource"
+	if err := validateLocationPrefix(locationPrefix); err != nil {
+		return nil, err
 	}
-	opts.LocationPrefix = "/" + strings.Trim(strings.TrimSpace(opts.LocationPrefix), "/")
 	if opts.ConnTimeout <= 0 {
 		opts.ConnTimeout = 30 * time.Second
 	}
@@ -89,69 +97,52 @@ func New(opts Options) (*Service, error) {
 		opts.Observer = noopObserver{}
 	}
 	opts.stats = &statsRecorder{}
-	return &Service{opts: opts, stats: opts.stats, sessions: make(map[string]*session)}, nil
+	return &SessionManager{
+		acceptor:       acceptor,
+		locationPrefix: locationPrefix,
+		opts:           opts,
+		stats:          opts.stats,
+		sessions:       make(map[string]*session),
+	}, nil
 }
 
 // Stats returns a concurrency-safe point-in-time snapshot.
-func (s *Service) Stats() Stats {
+func (s *SessionManager) Stats() Stats {
 	if s == nil || s.stats == nil {
 		return Stats{ClosedTotal: map[CloseReason]uint64{}}
 	}
 	return s.stats.snapshot()
 }
 
-// Mode returns the single, canonical _tg_mode value. Duplicate values and
-// malformed query strings are rejected so routing and token verification see
-// the same request semantics.
-func Mode(rawQuery string) (string, error) {
-	values, err := url.ParseQuery(rawQuery)
-	if err != nil {
-		return "", fmt.Errorf("%w: invalid query: %v", ErrBadRequest, err)
-	}
-	modes, exists := values[ModeQueryKey]
-	if !exists {
-		return "", nil
-	}
-	if len(modes) != 1 {
-		return "", fmt.Errorf("%w: duplicate %s", ErrBadRequest, ModeQueryKey)
-	}
-	mode := strings.TrimSpace(modes[0])
-	if mode == "" {
-		return "", fmt.Errorf("%w: empty %s", ErrBadRequest, ModeQueryKey)
-	}
-	return mode, nil
-}
-
-func (s *Service) Accept(ctx context.Context, req EchoRequest) (*EchoResult, error) {
-	if s == nil || !s.opts.Enabled {
-		if s != nil {
-			s.recordAcceptFailure(AcceptStageValidate)
-		}
-		return nil, ErrDisabled
+// Accept accepts an SDP offer and starts managing the resulting Echo session.
+func (s *SessionManager) Accept(ctx context.Context, req AcceptRequest) (*AcceptResult, error) {
+	if ctx == nil {
+		s.recordAcceptFailure(AcceptStageValidate)
+		return nil, fmt.Errorf("%w: context is nil", ErrInvalidArgument)
 	}
 	if len(req.OfferSDP) == 0 {
 		s.recordAcceptFailure(AcceptStageValidate)
-		return nil, fmt.Errorf("%w: offer is empty", ErrBadRequest)
-	}
-	mode, err := Mode(req.RawQuery)
-	if err != nil {
-		s.recordAcceptFailure(AcceptStageValidate)
-		return nil, err
-	}
-	if s.opts.RequireMode && mode != ModeEcho {
-		s.recordAcceptFailure(AcceptStageValidate)
-		return nil, fmt.Errorf("%w: %s must be %q", ErrBadRequest, ModeQueryKey, ModeEcho)
-	}
-	if mode != "" && mode != ModeEcho {
-		s.recordAcceptFailure(AcceptStageValidate)
-		return nil, fmt.Errorf("%w: unsupported %s %q", ErrBadRequest, ModeQueryKey, mode)
+		return nil, fmt.Errorf("%w: offer is empty", ErrInvalidArgument)
 	}
 	if err := ctx.Err(); err != nil {
 		s.recordAcceptFailure(AcceptStageValidate)
 		return nil, err
 	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil, ErrClosed
+	}
+	s.wg.Add(1)
+	s.mu.Unlock()
+	defer s.wg.Done()
 
-	result, err := s.opts.Acceptor.WhipAccept(req.OfferSDP, tirtcx.ConnEventOptions{
+	sessionID, err := randomSessionID()
+	if err != nil {
+		s.recordAcceptFailure(AcceptStageSessionID)
+		return nil, err
+	}
+	whipSession, err := s.acceptor.WhipAccept(ctx, req.OfferSDP, tirtcx.ConnEventOptions{
 		AudioBuffer:        16,
 		VideoBuffer:        16,
 		CommandBuffer:      16,
@@ -162,32 +153,48 @@ func (s *Service) Accept(ctx context.Context, req EchoRequest) (*EchoResult, err
 		s.recordAcceptFailure(AcceptStageWHIP)
 		return nil, err
 	}
-	sessionID, err := randomSessionID()
-	if err != nil {
-		s.recordAcceptFailure(AcceptStageSessionID)
-		return nil, err
-	}
-	pending := newSession(sessionID, "", nil, s.opts, func(reason CloseReason) {
+	pending := newSession(sessionID, "", whipSession, nil, s.opts, func(reason CloseReason) {
 		s.remove(sessionID, reason)
 	})
-	s.put(sessionID, pending)
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		_ = whipSession.Close()
+		return nil, ErrClosed
+	}
+	s.sessions[sessionID] = pending
+	s.stats.activeSessions.Store(uint64(len(s.sessions)))
+	s.wg.Add(1)
+	s.mu.Unlock()
 	s.stats.acceptedTotal.Add(1)
 	s.opts.Observer.SessionAccepted()
-	go s.waitAndRun(pending, result)
+	go func() {
+		defer s.wg.Done()
+		s.waitAndRun(pending, whipSession)
+	}()
 
-	return &EchoResult{
+	return &AcceptResult{
 		SessionID: sessionID,
-		AnswerSDP: result.AnswerSDP,
-		Location:  s.opts.LocationPrefix + "/" + sessionID,
+		AnswerSDP: whipSession.AnswerSDP(),
+		Location:  s.locationPrefix + "/" + sessionID,
 	}, nil
 }
 
-func (s *Service) waitAndRun(session *session, result *tirtcx.WhipAcceptResult) {
-	conn, err := result.WaitConn(s.opts.ConnTimeout)
+func (s *SessionManager) waitAndRun(
+	session *session,
+	whipSession *tirtcx.WhipSession,
+) {
+	connectCtx, cancelConnect := context.WithTimeout(context.Background(), s.opts.ConnTimeout)
+	defer cancelConnect()
+	conn, err := whipSession.WaitConn(connectCtx)
 	if err != nil {
-		s.recordAcceptFailure(AcceptStageConnect)
-		if errors.Is(err, tirtcx.ErrConnTimeout) {
+		if errors.Is(err, context.DeadlineExceeded) {
 			s.stats.connectTimeoutTotal.Add(1)
+			s.recordConnectFailure(ConnectFailureTimeout)
+		} else if errors.Is(err, context.Canceled) || errors.Is(err, tirtcx.ErrWhipSessionClosed) {
+			return
+		} else {
+			s.recordConnectFailure(ConnectFailureError)
 		}
 		s.opts.Logger.Error("echo connection failed",
 			"session_id", session.id,
@@ -206,8 +213,51 @@ func (s *Service) waitAndRun(session *session, result *tirtcx.WhipAcceptResult) 
 	session.run(conn.Events())
 }
 
-func (s *Service) Delete(_ context.Context, sessionID string) error {
+// Shutdown rejects new sessions, closes all active sessions, and waits for
+// their goroutines to exit until ctx is canceled.
+func (s *SessionManager) Shutdown(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	if ctx == nil {
+		return fmt.Errorf("%w: shutdown context is nil", ErrInvalidArgument)
+	}
+	s.mu.Lock()
+	s.closed = true
+	sessions := make([]*session, 0, len(s.sessions))
+	for id, active := range s.sessions {
+		sessions = append(sessions, active)
+		delete(s.sessions, id)
+	}
+	s.stats.activeSessions.Store(0)
+	s.mu.Unlock()
+
+	for _, active := range sessions {
+		if err := active.shutdown(CloseReasonShutdown); err != nil {
+			s.opts.Logger.Error("close Echo session during shutdown",
+				"session_id", active.id,
+				"error", err)
+		}
+	}
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// Delete terminates a session. Deleting an unknown non-empty ID is idempotent.
+func (s *SessionManager) Delete(_ context.Context, sessionID string) error {
 	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return fmt.Errorf("%w: session ID is empty", ErrInvalidArgument)
+	}
 	s.mu.Lock()
 	session := s.sessions[sessionID]
 	if session != nil {
@@ -223,15 +273,7 @@ func (s *Service) Delete(_ context.Context, sessionID string) error {
 	return session.close()
 }
 
-func (s *Service) put(id string, session *session) {
-	s.mu.Lock()
-	s.sessions[id] = session
-	count := len(s.sessions)
-	s.stats.activeSessions.Store(uint64(count))
-	s.mu.Unlock()
-}
-
-func (s *Service) remove(id string, reason CloseReason) {
+func (s *SessionManager) remove(id string, reason CloseReason) {
 	s.mu.Lock()
 	session := s.sessions[id]
 	if session != nil {
@@ -247,9 +289,31 @@ func (s *Service) remove(id string, reason CloseReason) {
 	}
 }
 
-func (s *Service) recordAcceptFailure(stage AcceptStage) {
+func (s *SessionManager) recordAcceptFailure(stage AcceptStage) {
 	s.stats.acceptFailedTotal.Add(1)
 	s.opts.Observer.AcceptFailed(stage)
+}
+
+func (s *SessionManager) recordConnectFailure(reason ConnectFailureReason) {
+	s.stats.connectFailedTotal.Add(1)
+	s.opts.Observer.ConnectFailed(reason)
+}
+
+func validateLocationPrefix(locationPrefix string) error {
+	switch {
+	case locationPrefix == "":
+		return fmt.Errorf("%w: invalid Location prefix %q: path is empty", ErrInvalidArgument, locationPrefix)
+	case !strings.HasPrefix(locationPrefix, "/"):
+		return fmt.Errorf("%w: invalid Location prefix %q: path must start with '/'", ErrInvalidArgument, locationPrefix)
+	case strings.HasSuffix(locationPrefix, "/"):
+		return fmt.Errorf("%w: invalid Location prefix %q: trailing slash is not allowed", ErrInvalidArgument, locationPrefix)
+	case strings.ContainsAny(locationPrefix, "?#{} \t\r\n"):
+		return fmt.Errorf("%w: invalid Location prefix %q: query, fragment, wildcard, and whitespace are not allowed", ErrInvalidArgument, locationPrefix)
+	case path.Clean(locationPrefix) != locationPrefix:
+		return fmt.Errorf("%w: invalid Location prefix %q: path is not canonical", ErrInvalidArgument, locationPrefix)
+	default:
+		return nil
+	}
 }
 
 func randomSessionID() (string, error) {
@@ -260,12 +324,14 @@ func randomSessionID() (string, error) {
 	return hex.EncodeToString(value[:]), nil
 }
 
+// TimeSyncRequest is the payload for CmdTimeSyncRequest.
 type TimeSyncRequest struct {
 	Version          int    `json:"version"`
 	Seq              uint32 `json:"seq"`
 	ClientSendUnixNS int64  `json:"client_send_unix_ns"`
 }
 
+// TimeSyncResponse is the payload for CmdTimeSyncResponse.
 type TimeSyncResponse struct {
 	Version          int    `json:"version"`
 	Seq              uint32 `json:"seq"`

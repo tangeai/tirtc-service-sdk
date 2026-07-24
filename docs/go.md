@@ -59,43 +59,69 @@ _ = tirtcx.Start()
 defer tirtcx.Stop()
 
 // The surrounding HTTP handler has already passed BearerInterceptor.
-result, err := acceptor.WhipAccept(offerSDP, tirtcx.ConnEventOptions{
+acceptContext, cancelAccept := context.WithTimeout(r.Context(), 10*time.Second)
+defer cancelAccept()
+session, err := acceptor.WhipAccept(acceptContext, offerSDP, tirtcx.ConnEventOptions{
     CommandBuffer:      16,
     DisconnectedBuffer: 4,
+    SubscribeVideoHandler: func(streamID uint8) int {
+        return 0 // Return the TiRTC subscription result synchronously.
+    },
 })
 if err != nil {
     // handle acceptance error
 }
 
-// Return result.AnswerSDP according to the application's HTTP design.
-answerSDP := result.AnswerSDP
+// Return session.AnswerSDP() according to the application's HTTP design.
+answerSDP := session.AnswerSDP()
 _ = answerSDP
 
-conn, err := result.WaitConn(30 * time.Second)
+connectContext, cancelConnect := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancelConnect()
+conn, err := session.WaitConn(connectContext)
 if err != nil {
     // handle connection error
 }
+defer session.Close()
 
 events := conn.Events()
 command := <-events.Command
 // Handle command.Cmd and command.Data.
 
 _ = conn.SendCommand(0x10000, []byte("hello"))
+
+<-conn.Done()
+if err := conn.Err(); err != nil {
+    // The connection ended with an error.
+}
 ```
+
+`WhipSession` owns the pending or connected `Conn`. `WaitConn` is safe for
+concurrent and repeated calls. Each waiter supplies its own context; canceling
+one waiter does not close the session. The context passed to `WhipAccept`
+controls only the synchronous SDP-answer phase, so an HTTP handler can pass its
+request context without canceling connection establishment after returning the
+answer.
+
+Applications own the HTTP resource ID, Location, registry, and DELETE policy;
+DELETE should remove the application resource and call `session.Close()`.
+Subscription decisions use `SubscribeVideoHandler` and
+`SubscribeAudioHandler`, which return directly to the native callback and
+cannot be left waiting on a response channel.
 
 ## Example Service
 
 ```bash
-cd go
-go run -tags tirtc_clib ./examples/quick-start \
+cd go/examples/quick-start
+go run -tags tirtc_clib . \
   -access-key ak1 \
   -public-key "$PUBLIC_KEY" \
-  -service echo
+  -service quick-start
 ```
 
-The quick-start example registers `POST /whip` and
-`DELETE /whip/resource/{session_id}`, including matching `Location` responses
-and the bearer-token authentication interceptor.
+The quick-start example implements a normal WHIP business session that sends
+synthetic PCM audio and JPEG video. The same `POST /whip` handler also has the
+Echo capability, with Echo selection kept inside the SDK.
 
-See `examples/observable-service` for `slog`, `Service.Stats()`, Echo and
+See `examples/observable-service` for `slog`, `HTTPAdapter.Stats()`, Echo and
 authentication observers, and a sample `/metrics` endpoint.

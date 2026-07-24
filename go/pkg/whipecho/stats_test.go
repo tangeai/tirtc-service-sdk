@@ -26,10 +26,11 @@ func (o *recordingObserver) SessionClosed(reason CloseReason, _ time.Duration) {
 	o.closed = append(o.closed, reason)
 	o.mu.Unlock()
 }
-func (*recordingObserver) AcceptFailed(AcceptStage) {}
-func (*recordingObserver) AudioEchoed(int)          {}
-func (*recordingObserver) VideoEchoed(int)          {}
-func (*recordingObserver) SendFailed(MediaType)     {}
+func (*recordingObserver) AcceptFailed(AcceptStage)           {}
+func (*recordingObserver) ConnectFailed(ConnectFailureReason) {}
+func (*recordingObserver) AudioEchoed(int)                    {}
+func (*recordingObserver) VideoEchoed(int)                    {}
+func (*recordingObserver) SendFailed(MediaType)               {}
 func (o *recordingObserver) EventsDropped(event EventType, count uint64) {
 	o.mu.Lock()
 	if o.dropped == nil {

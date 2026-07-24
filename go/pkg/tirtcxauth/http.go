@@ -8,8 +8,8 @@ import (
 
 type claimsContextKey struct{}
 
-// HTTPInterceptor is standard net/http middleware.
-type HTTPInterceptor func(http.Handler) http.Handler
+// HTTPInterceptor authenticates an HTTP handler function.
+type HTTPInterceptor func(http.HandlerFunc) http.HandlerFunc
 
 type AuthFailureReason string
 
@@ -55,8 +55,8 @@ func ClaimsFromContext(ctx context.Context) (TokenClaims, bool) {
 // claims to the request context before invoking the next handler.
 func BearerInterceptor(service string, verifier TokenVerifier, observers ...AuthObserver) HTTPInterceptor {
 	service = strings.TrimSpace(service)
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
 			token, ok := bearerToken(r.Header.Get("Authorization"))
 			if !ok {
 				notifyAuthFailed(observers, AuthFailureMissingToken)
@@ -80,8 +80,8 @@ func BearerInterceptor(service string, verifier TokenVerifier, observers ...Auth
 				}
 			}
 			ctx := context.WithValue(r.Context(), claimsContextKey{}, *claims)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
+			next(w, r.WithContext(ctx))
+		}
 	}
 }
 

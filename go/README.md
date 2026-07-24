@@ -16,10 +16,11 @@ timeout behavior belong to the application server. The SDK does not design
 HTTP endpoints, manage WHIP Location resources, or implement DELETE
 termination semantics.
 
-`pkg/whipecho` is an optional higher-level capability that registers its
-related `net/http` handlers under a caller-selected base path. Authentication
-is applied independently as standard middleware. See `../docs/echo.md`.
-The returned service exposes a concurrency-safe `Stats()` snapshot and accepts
+`pkg/whipecho` is an optional higher-level capability that provides composable
+`net/http` operations with a caller-selected Location prefix. The application owns
+route registration and applies authentication as standard middleware. See
+`../docs/echo.md`.
+The returned HTTP adapter exposes a concurrency-safe `Stats()` snapshot and accepts
 an optional `Observer` for application-owned monitoring integrations.
 
 ## Build Tags
@@ -78,7 +79,9 @@ _ = tirtcx.Start()
 defer tirtcx.Stop()
 
 // The surrounding HTTP handler has already passed BearerInterceptor.
-result, err := acceptor.WhipAccept(offerSDP, tirtcx.ConnEventOptions{
+acceptContext, cancelAccept := context.WithTimeout(r.Context(), 10*time.Second)
+defer cancelAccept()
+session, err := acceptor.WhipAccept(acceptContext, offerSDP, tirtcx.ConnEventOptions{
     AudioBuffer:        16,
     DisconnectedBuffer: 4,
 })
@@ -87,12 +90,15 @@ if err != nil {
 }
 
 // The application owns HTTP behavior, including 201, Location, and DELETE.
-answerSDP := result.AnswerSDP
+answerSDP := session.AnswerSDP()
 
-conn, err := result.WaitConn(30 * time.Second)
+connectContext, cancelConnect := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancelConnect()
+conn, err := session.WaitConn(connectContext)
 if err != nil {
-    // handle connection error
+	// handle connection error
 }
+defer session.Close()
 
 audioFrame := <-conn.Events().Audio
 // Handle audioFrame.Info and audioFrame.Data.
@@ -101,19 +107,30 @@ _ = audioFrame
 _ = answerSDP
 ```
 
+`WaitConn` may be called concurrently or repeatedly; every caller supplies its
+own wait context and receives the same eventual connection result. Canceling a
+wait does not close the session. The context passed to `WhipAccept` controls
+only the synchronous SDP-answer phase. After `WaitConn` succeeds, close the
+session explicitly when the application resource ends.
+
 `pkg/tirtcx` wraps TiRTC connection operations without choosing an
 authentication policy or providing an HTTP handler. HTTP services should apply
 `tirtcxauth.BearerInterceptor` before calling `WhipAcceptor.WhipAccept`.
 
 ## Example Service
 
-`examples/quick-start` demonstrates the minimum Echo HTTP and authentication
-integration. `examples/observable-service` adds Stats, observers, metrics, and
-structured logging.
+`examples/quick-start` demonstrates a normal WHIP business handler that sends
+synthetic audio/video while also exposing Echo mode. `examples/observable-service`
+adds Stats, observers, metrics, structured logging, and graceful HTTP shutdown.
+`examples/gin-service` demonstrates framework middleware integration.
 
 ```bash
-go run -tags tirtc_clib ./examples/quick-start \
+cd examples/quick-start
+go run -tags tirtc_clib . \
   -access-key ak1 \
   -public-key "$PUBLIC_KEY" \
-  -service echo
+  -service quick-start
 ```
+
+The `examples` tree has its own `go.mod`, so example-only dependencies do not
+become dependencies of the SDK module.

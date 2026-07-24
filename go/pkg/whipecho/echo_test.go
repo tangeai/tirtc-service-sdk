@@ -1,35 +1,62 @@
 package whipecho
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
+
+	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/pkg/tirtcx"
 )
 
-func TestMode(t *testing.T) {
-	tests := []struct {
-		query string
-		want  string
-		err   bool
-	}{
-		{"device_id=d1", "", false},
-		{"device_id=d1&_tg_mode=echo", "echo", false},
-		{"_tg_mode=", "", true},
-		{"_tg_mode=echo&_tg_mode=echo", "", true},
-		{"%zz", "", true},
-	}
-	for _, test := range tests {
-		got, err := Mode(test.query)
-		if got != test.want || (err != nil) != test.err {
-			t.Errorf("Mode(%q) = %q, %v; want %q, err=%v", test.query, got, err, test.want, test.err)
-		}
-	}
+type fakeAcceptor struct{}
+
+func (fakeAcceptor) WhipAccept(
+	context.Context,
+	[]byte,
+	tirtcx.ConnEventOptions,
+) (*tirtcx.WhipSession, error) {
+	return nil, nil
 }
 
 func TestNewRejectsNilAcceptor(t *testing.T) {
-	_, err := New(Options{Enabled: true})
-	if !errors.Is(err, ErrBadRequest) {
-		t.Fatalf("New error = %v, want ErrBadRequest", err)
+	_, err := NewSessionManager(nil, "/whip/echo/resource", Options{})
+	if !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("NewSessionManager error = %v, want ErrInvalidArgument", err)
+	}
+}
+
+func TestNewSessionManagerRejectsNonCanonicalLocationPrefix(t *testing.T) {
+	_, err := NewSessionManager(fakeAcceptor{}, "whip/echo/resource/", Options{})
+	if !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("NewSessionManager error = %v, want ErrInvalidArgument", err)
+	}
+}
+
+func TestSessionManagerRejectsEmptyDeleteSessionID(t *testing.T) {
+	manager, err := NewSessionManager(fakeAcceptor{}, "/whip/echo/resource", Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Delete(context.Background(), " "); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("Delete error = %v, want ErrInvalidArgument", err)
+	}
+}
+
+func TestSessionManagerShutdownRejectsNewSessions(t *testing.T) {
+	manager, err := NewSessionManager(fakeAcceptor{}, "/whip/echo/resource", Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Shutdown(context.Background()); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	_, err = manager.Accept(context.Background(), AcceptRequest{OfferSDP: []byte("offer")})
+	if !errors.Is(err, ErrClosed) {
+		t.Fatalf("Accept error = %v, want ErrClosed", err)
+	}
+	if stats := manager.Stats(); stats.ActiveSessions != 0 {
+		t.Fatalf("ActiveSessions = %d, want 0", stats.ActiveSessions)
 	}
 }
 

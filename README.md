@@ -20,10 +20,10 @@ The Go SDK provides:
 - A TiRTC `Conn` object layer for WHIP accept/connect and connection operations.
 
 The core connection packages do not impose HTTP endpoint design. The optional
-`pkg/whipecho` capability registers its related POST/DELETE handlers and keeps
+`pkg/whipecho` provides composable POST/DELETE adapters and keeps
 their `Location` values consistent.
 
-Go quick-start and observable Echo services under `go/examples/` demonstrate
+The Go quick-start application and observable Echo example under `go/examples/` demonstrate
 the reusable HTTP registration, authentication, statistics, and observers.
 
 The Python SDK is intentionally not implemented yet; its directory is reserved

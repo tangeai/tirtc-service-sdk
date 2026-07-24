@@ -15,20 +15,28 @@ const (
 )
 
 type session struct {
-	id        string
-	deviceID  string
-	conn      *tirtcx.Conn
-	opts      Options
-	onDone    func(CloseReason)
-	createdAt time.Time
+	id          string
+	deviceID    string
+	whipSession *tirtcx.WhipSession
+	conn        *tirtcx.Conn
+	opts        Options
+	onDone      func(CloseReason)
+	createdAt   time.Time
 
 	mu     sync.Mutex
 	closed bool
 }
 
-func newSession(id, deviceID string, conn *tirtcx.Conn, opts Options, onDone func(CloseReason)) *session {
+func newSession(
+	id string,
+	deviceID string,
+	whipSession *tirtcx.WhipSession,
+	conn *tirtcx.Conn,
+	opts Options,
+	onDone func(CloseReason),
+) *session {
 	s := &session{
-		id: id, deviceID: deviceID, conn: conn, opts: opts, onDone: onDone,
+		id: id, deviceID: deviceID, whipSession: whipSession, conn: conn, opts: opts, onDone: onDone,
 		createdAt: time.Now(),
 	}
 	return s
@@ -36,11 +44,12 @@ func newSession(id, deviceID string, conn *tirtcx.Conn, opts Options, onDone fun
 
 func (s *session) bind(conn *tirtcx.Conn) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.closed {
+		s.mu.Unlock()
 		return false
 	}
 	s.conn = conn
+	s.mu.Unlock()
 	return true
 }
 
@@ -49,7 +58,7 @@ func (s *session) run(events tirtcx.ConnEvents) {
 		select {
 		case frame, ok := <-events.Audio:
 			if !ok {
-				s.finish(CloseReasonEventChannelClosed)
+				s.finishFromConn()
 				return
 			}
 			frame.Info.Ts = packAudioTimestamp(time.Now().UnixMicro(), frame.Info.Ts)
@@ -67,7 +76,7 @@ func (s *session) run(events tirtcx.ConnEvents) {
 			}
 		case frame, ok := <-events.Video:
 			if !ok {
-				s.finish(CloseReasonEventChannelClosed)
+				s.finishFromConn()
 				return
 			}
 			if err := s.conn.SendVideo(frame.Info, frame.Data); err != nil {
@@ -84,27 +93,40 @@ func (s *session) run(events tirtcx.ConnEvents) {
 			}
 		case command, ok := <-events.Command:
 			if !ok {
-				s.finish(CloseReasonEventChannelClosed)
+				s.finishFromConn()
 				return
 			}
 			s.handleCommand(command.Cmd, command.Data)
 		case err, ok := <-events.Error:
-			if ok {
-				s.opts.Logger.Error("echo connection error",
-					"session_id", s.id,
-					"error", err)
+			if !ok {
+				s.finishFromConn()
+				return
 			}
+			s.opts.Logger.Error("echo connection error",
+				"session_id", s.id,
+				"error", err)
 			s.finish(CloseReasonConnectionError)
 			return
 		case _, ok := <-events.Disconnected:
 			if !ok {
-				s.finish(CloseReasonEventChannelClosed)
+				s.finishFromConn()
 			} else {
 				s.finish(CloseReasonDisconnected)
 			}
 			return
+		case <-s.conn.Done():
+			s.finishFromConn()
+			return
 		}
 	}
+}
+
+func (s *session) finishFromConn() {
+	if s.conn.Err() != nil {
+		s.finish(CloseReasonConnectionError)
+		return
+	}
+	s.finish(CloseReasonDisconnected)
 }
 
 func (s *session) handleCommand(cmd uint32, data []byte) {
@@ -147,10 +169,15 @@ func (s *session) shutdown(reason CloseReason) error {
 	}
 	s.closed = true
 	conn := s.conn
+	whipSession := s.whipSession
 	s.mu.Unlock()
 	var err error
 	if conn != nil {
 		s.opts.stats.recordDropped(s.opts.Observer, conn.EventStats())
+	}
+	if whipSession != nil {
+		err = whipSession.Close()
+	} else if conn != nil {
 		err = conn.Close()
 	}
 	s.opts.stats.recordClose(reason)

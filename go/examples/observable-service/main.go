@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/pkg/tirtcx"
@@ -46,6 +49,9 @@ func main() {
 		OnAcceptFailed: func(stage whipecho.AcceptStage) {
 			logger.Warn("Echo accept failed", "stage", stage)
 		},
+		OnConnectFailed: func(reason whipecho.ConnectFailureReason) {
+			logger.Warn("Echo connection failed", "reason", reason)
+		},
 		OnSendFailed: func(media whipecho.MediaType) {
 			logger.Warn("Echo send failed", "media", media)
 		},
@@ -65,18 +71,18 @@ func main() {
 
 	mux := http.NewServeMux()
 	acceptor := tirtcx.NewWhipAcceptor(*candidate)
-	echo, err := whipecho.RegisterHTTPHandlers(
-		mux,
-		"/whip",
+	echo, err := whipecho.NewHTTPAdapter(
 		acceptor,
+		"/whip/echo/resource",
 		whipecho.HTTPOptions{
-			Enabled:  true,
 			Logger:   logger,
 			Observer: echoObserver,
 		},
-		tirtcxauth.BearerInterceptor(*serviceName, verifier, authObserver),
 	)
 	must(err, logger)
+	auth := tirtcxauth.BearerInterceptor(*serviceName, verifier, authObserver)
+	mux.HandleFunc("POST /whip", auth(echo.PostHandler()))
+	mux.HandleFunc("DELETE /whip/echo/resource/{session_id}", auth(echo.DeleteHandler()))
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, _ *http.Request) {
 		writeMetrics(w, echo.Stats(), metrics)
 	})
@@ -86,8 +92,36 @@ func main() {
 	must(tirtcx.Start(), logger)
 	defer tirtcx.Stop()
 
-	logger.Info("observable WHIP Echo service started", "listen", *listen)
-	must(http.ListenAndServe(*listen, mux), logger)
+	server := &http.Server{
+		Addr:              *listen,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	serverErrors := make(chan error, 1)
+	go func() {
+		logger.Info("observable WHIP Echo service started", "listen", *listen)
+		serverErrors <- server.ListenAndServe()
+	}()
+
+	stopContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	select {
+	case err := <-serverErrors:
+		if err != nil && err != http.ErrServerClosed {
+			logger.Error("HTTP server stopped", "error", err)
+		}
+	case <-stopContext.Done():
+	}
+
+	shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownContext); err != nil {
+		logger.Error("shut down HTTP server", "error", err)
+	}
+	if err := echo.Shutdown(shutdownContext); err != nil {
+		logger.Error("shut down Echo sessions", "error", err)
+	}
 }
 
 func writeMetrics(w http.ResponseWriter, stats whipecho.Stats, observed *observedMetrics) {
@@ -95,6 +129,7 @@ func writeMetrics(w http.ResponseWriter, stats whipecho.Stats, observed *observe
 	_, _ = fmt.Fprintf(w, "whip_echo_active_sessions %d\n", stats.ActiveSessions)
 	_, _ = fmt.Fprintf(w, "whip_echo_accepted_total %d\n", stats.AcceptedTotal)
 	_, _ = fmt.Fprintf(w, "whip_echo_accept_failed_total %d\n", stats.AcceptFailedTotal)
+	_, _ = fmt.Fprintf(w, "whip_echo_connect_failed_total %d\n", stats.ConnectFailedTotal)
 	_, _ = fmt.Fprintf(w, "whip_echo_connect_timeout_total %d\n", stats.ConnectTimeoutTotal)
 	_, _ = fmt.Fprintf(w, "whip_echo_audio_frames_total %d\n", stats.AudioFramesTotal)
 	_, _ = fmt.Fprintf(w, "whip_echo_audio_bytes_total %d\n", stats.AudioBytesTotal)

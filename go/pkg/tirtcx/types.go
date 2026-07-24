@@ -37,11 +37,6 @@ type Command struct {
 	Data []byte
 }
 
-type SubscribeEvent struct {
-	StreamID uint8
-	Result   chan int
-}
-
 type EventStats struct {
 	AudioDropped            uint64
 	VideoDropped            uint64
@@ -50,8 +45,6 @@ type EventStats struct {
 	ErrorDropped            uint64
 	DisconnectedDropped     uint64
 	RequestKeyFrameDropped  uint64
-	SubscribeVideoDropped   uint64
 	UnsubscribeVideoDropped uint64
-	SubscribeAudioDropped   uint64
 	UnsubscribeAudioDropped uint64
 }
