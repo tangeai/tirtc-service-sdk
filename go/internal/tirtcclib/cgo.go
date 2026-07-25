@@ -166,21 +166,21 @@ func TiRtcDisconnect(hconn ConnHandle) error {
 func TiRtcSendMessageStream(hconn ConnHandle, info FrameInfo, frame []byte) error {
 	cInfo, ptr, cleanup := frameArgs(info, frame)
 	defer cleanup()
-	return ErrorFromCode(int(C.TiRtcSendMessageStream(C.tirtc_conn_t(hconn), &cInfo, ptr)))
+	return errorFromSendResult(int(C.TiRtcSendMessageStream(C.tirtc_conn_t(hconn), &cInfo, ptr)))
 }
 
 // TiRtcSendVideoStream maps to tiRTC.h TiRtcSendVideoStream.
 func TiRtcSendVideoStream(hconn ConnHandle, info FrameInfo, frame []byte) error {
 	cInfo, ptr, cleanup := frameArgs(info, frame)
 	defer cleanup()
-	return ErrorFromCode(int(C.TiRtcSendVideoStream(C.tirtc_conn_t(hconn), &cInfo, ptr)))
+	return errorFromSendResult(int(C.TiRtcSendVideoStream(C.tirtc_conn_t(hconn), &cInfo, ptr)))
 }
 
 // TiRtcSendAudioStream maps to tiRTC.h TiRtcSendAudioStream.
 func TiRtcSendAudioStream(hconn ConnHandle, info FrameInfo, frame []byte) error {
 	cInfo, ptr, cleanup := frameArgs(info, frame)
 	defer cleanup()
-	return ErrorFromCode(int(C.TiRtcSendAudioStream(C.tirtc_conn_t(hconn), &cInfo, ptr)))
+	return errorFromSendResult(int(C.TiRtcSendAudioStream(C.tirtc_conn_t(hconn), &cInfo, ptr)))
 }
 
 func frameArgs(info FrameInfo, frame []byte) (C.TIRTCFRAMEINFO, unsafe.Pointer, func()) {
