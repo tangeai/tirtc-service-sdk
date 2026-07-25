@@ -12,8 +12,8 @@ var (
 	connRegistry sync.Map // tirtcclib.ConnHandle -> *Conn
 )
 
-func callbacks() *tirtcclib.Callbacks {
-	return &tirtcclib.Callbacks{
+func callbacks(onEvents ...func(event int, data []byte)) *tirtcclib.Callbacks {
+	result := &tirtcclib.Callbacks{
 		OnConnError: func(hconn tirtcclib.ConnHandle, errorCode int) {
 			if conn := lookupConnForCallback(hconn, "connection_error"); conn != nil {
 				err := tirtcclib.ErrorFromCode(errorCode)
@@ -99,6 +99,10 @@ func callbacks() *tirtcclib.Callbacks {
 			}
 		},
 	}
+	if len(onEvents) > 0 {
+		result.OnEvent = onEvents[0]
+	}
+	return result
 }
 
 func callSubscribeHandler(handler func(uint8) int, streamID uint8) (result int) {

@@ -22,6 +22,15 @@ const (
 	TiRtcOptConnectCacheSize Option = 11
 )
 
+// SystemEvent maps to tiRTC.h TIRTCSYSEVENT.
+type SystemEvent int
+
+const (
+	TiRtcEventSystemStarted SystemEvent = iota
+	TiRtcEventSystemStopped
+	TiRtcEventAccessHijacking
+)
+
 // MediaType maps to tiRTC.h TIRTCMEDIA.
 type MediaType uint8
 
