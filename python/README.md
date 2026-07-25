@@ -22,12 +22,18 @@ python3 -m pytest
 
 ## 原生库
 
-`tirtcx` 通过 `ctypes` 调用 TiRTC 动态库。将正式发布包中的 `libTiRTC.so`
-或 `libTiRTC.dylib` 放入 `clib/lib/`，也可以显式指定路径：
+`tirtcx` 通过 `ctypes` 调用 TiRTC 动态库。请从
+[TiRTC SDK 下载页](https://docs.tange.ai/products/tirtc/download.html) 获取与部署平台匹配的 SDK，
+解压后找到 Linux 的 `libTiRTC.so` 或 macOS 的 `libTiRTC.dylib`。
+
+普通 `pip install .` 安装应通过环境变量指定动态库的绝对路径：
 
 ```bash
-export TIRTC_PYTHON_LIBRARY=/absolute/path/to/libTiRTC.so
+export TIRTC_PYTHON_LIBRARY='/absolute/path/to/libTiRTC.so'
 ```
+
+只有直接从源码树运行或使用 editable 安装时，才可改为把动态库放入仓库的
+`clib/lib/`。动态库及其运行时依赖必须来自同一 TiRTC SDK 发布包。
 
 令牌和 HTTP 认证功能不依赖原生库。只有调用 `tirtcx.init()`、创建
 `WhipAcceptor` 或使用连接 API 时才加载原生库。

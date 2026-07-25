@@ -24,10 +24,11 @@ python3 examples/whip_token_signer.py \
 
 ## quick_start.py
 
-先设置 TiRTC 动态库路径，再启动服务：
+从 [TiRTC SDK 下载页](https://docs.tange.ai/products/tirtc/download.html) 获取与平台匹配的 SDK，
+解压后将 `TIRTC_PYTHON_LIBRARY` 设置为 `libTiRTC.so` 或 `libTiRTC.dylib` 的绝对路径，再启动服务：
 
 ```bash
-export TIRTC_PYTHON_LIBRARY=/absolute/path/to/libTiRTC.so
+export TIRTC_PYTHON_LIBRARY='/absolute/path/to/libTiRTC.so'
 
 python3 examples/quick_start.py \
   --listen :8080 \

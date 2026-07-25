@@ -36,5 +36,6 @@ go build -tags tirtc_clib ./...
 
 不指定 `tirtc_clib` Build Tag 时，Go 封装会编译为 Stub，使纯 Go 包可以在没有原生库的环境中测试。
 
-Python SDK 将 `libTiRTC.so` 或 `libTiRTC.dylib` 放入 `clib/lib/`，也可以通过
-`TIRTC_PYTHON_LIBRARY` 指定绝对路径。Token 和 HTTP 认证测试不依赖原生库。
+Python SDK 使用普通 `pip install .` 安装时，应通过 `TIRTC_PYTHON_LIBRARY`
+指定 `libTiRTC.so` 或 `libTiRTC.dylib` 的绝对路径。只有直接从源码树运行或使用
+editable 安装时，才可将动态库放入 `clib/lib/`。Token 和 HTTP 认证测试不依赖原生库。

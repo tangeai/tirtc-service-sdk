@@ -1,5 +1,13 @@
 # TiRTC-X Ed25519 Token
 
+业务服务端完成授权后，同时生成：
+
+```text
+peer_id = whips://{service_name}?{raw_query}
+```
+
+没有 Query 时省略 `?`。`service_name` 和 Query 必须与签发 Token 时使用的值一致。
+
 WHIP Token 使用 Ed25519 签名：
 
 ```text
@@ -21,7 +29,27 @@ Claims：
 }
 ```
 
-`canonical_query` 通过解析 WHIP 请求的 Query，再按照标准 URL Query 编码规则对参数名排序并重新编码得到。
+`canonical_query` 的输入可以包含或省略开头的 `?`。字段使用 `&` 分隔；无效的百分号转义和未转义的分号会被拒绝。按照 `application/x-www-form-urlencoded` 规则解析后：
+
+1. 按参数名的字节序升序排列。
+2. 同名参数保留原始值顺序。
+3. 使用标准 URL Query 规则重新编码：空格使用 `+`，其他转义使用大写 `%HH`。
+4. 无值参数编码为 `name=`。
+
+例如：
+
+```text
+b=2&a=1&a=0  ->  a=1&a=0&b=2
+```
+
+Scope 的完整计算方式：
+
+```text
+query_hash = lowercase_hex(SHA-256(UTF-8(canonical_query)))
+scope = "connect:" + service_name + ":" + query_hash
+```
+
+JSON Claims 使用 UTF-8 编码。先对实际 JSON Payload 进行无填充 Base64URL 编码，再使用 Ed25519 私钥签署 `payload_b64url` 的 ASCII 字节；签名输入不包含 `v1.`。
 
 验证 API 可以接受空的预期设备 ID。此时仍会验证签名、Issuer、有效期和 Scope，但不会将 `sub` 与外部设备 ID 比较；`sub` 仍会随 Claims 返回。
 

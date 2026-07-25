@@ -26,11 +26,13 @@ cp "$sdk_dir/lib/libwebrtc.so" clib/lib/
 
 ## Python
 
-Python SDK 通过 `ctypes` 加载 TiRTC 动态库。将 `libTiRTC.so` 或
-`libTiRTC.dylib` 放入 `clib/lib/`，也可以设置：
+Python SDK 通过 `ctypes` 加载 TiRTC 动态库。普通 `pip install .` 安装应设置
+动态库的绝对路径：
 
 ```bash
-export TIRTC_PYTHON_LIBRARY=/absolute/path/to/libTiRTC.so
+export TIRTC_PYTHON_LIBRARY='/absolute/path/to/libTiRTC.so'
 ```
 
-动态库及其运行时依赖必须来自同一发布版本。令牌签发和验证不加载原生库。
+直接从源码树运行或使用 editable 安装时，也可以将 `libTiRTC.so` 或
+`libTiRTC.dylib` 放入 `clib/lib/`。动态库及其运行时依赖必须来自同一发布版本。
+令牌签发和验证不加载原生库。
