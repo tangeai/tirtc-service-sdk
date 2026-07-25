@@ -20,7 +20,16 @@ func replaceNativeStart(
 	})
 }
 
-func TestStartWithTimeoutWaitsForStartedEvent(t *testing.T) {
+func replaceStartTimeout(t *testing.T, replacement time.Duration) {
+	t.Helper()
+	previous := startTimeout
+	startTimeout = replacement
+	t.Cleanup(func() {
+		startTimeout = previous
+	})
+}
+
+func TestStartWaitsForStartedEvent(t *testing.T) {
 	replaceNativeStart(t, func(deviceID string, callbacks *tirtcclib.Callbacks) error {
 		if deviceID != "" {
 			t.Fatalf("deviceID = %q, want empty WHIP service mode", deviceID)
@@ -32,45 +41,40 @@ func TestStartWithTimeoutWaitsForStartedEvent(t *testing.T) {
 		return nil
 	})
 
-	if err := StartWithTimeout(time.Second); err != nil {
+	if err := Start(); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestStartWithTimeoutReturnsNativeStartError(t *testing.T) {
+func TestStartReturnsNativeStartError(t *testing.T) {
 	want := errors.New("native start failed")
 	replaceNativeStart(t, func(string, *tirtcclib.Callbacks) error {
 		return want
 	})
 
-	if err := StartWithTimeout(time.Second); !errors.Is(err, want) {
+	if err := Start(); !errors.Is(err, want) {
 		t.Fatalf("error = %v, want %v", err, want)
 	}
 }
 
-func TestStartWithTimeoutTimesOut(t *testing.T) {
+func TestStartTimesOut(t *testing.T) {
 	replaceNativeStart(t, func(string, *tirtcclib.Callbacks) error {
 		return nil
 	})
+	replaceStartTimeout(t, time.Millisecond)
 
-	if err := StartWithTimeout(time.Millisecond); !errors.Is(err, ErrStartTimeout) {
+	if err := Start(); !errors.Is(err, ErrStartTimeout) {
 		t.Fatalf("error = %v, want ErrStartTimeout", err)
 	}
 }
 
-func TestStartWithTimeoutRejectsStoppedEvent(t *testing.T) {
+func TestStartRejectsStoppedEvent(t *testing.T) {
 	replaceNativeStart(t, func(_ string, callbacks *tirtcclib.Callbacks) error {
 		go callbacks.OnEvent(int(tirtcclib.TiRtcEventSystemStopped), nil)
 		return nil
 	})
 
-	if err := StartWithTimeout(time.Second); !errors.Is(err, ErrStoppedBeforeStart) {
+	if err := Start(); !errors.Is(err, ErrStoppedBeforeStart) {
 		t.Fatalf("error = %v, want ErrStoppedBeforeStart", err)
-	}
-}
-
-func TestStartWithTimeoutRejectsInvalidTimeout(t *testing.T) {
-	if err := StartWithTimeout(0); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("error = %v, want ErrInvalidArgument", err)
 	}
 }

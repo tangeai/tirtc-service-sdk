@@ -7,9 +7,10 @@ import (
 	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/internal/tirtcclib"
 )
 
-const DefaultStartTimeout = 15 * time.Second
-
-var nativeStart = tirtcclib.TiRtcStart
+var (
+	nativeStart  = tirtcclib.TiRtcStart
+	startTimeout = 15 * time.Second
+)
 
 // Init maps to TiRtcInit and registers SDK callbacks through Start.
 func Init() error {
@@ -25,16 +26,6 @@ func SetNativeLogLevel(level int) {
 // Start starts TiRTC in WHIP service mode and waits until the native SDK
 // reports TIRTC_EVENT_SYS_STARTED.
 func Start() error {
-	return StartWithTimeout(DefaultStartTimeout)
-}
-
-// StartWithTimeout starts TiRTC and waits at most timeout for the asynchronous
-// native startup result. TiRtcStart returning zero only means that its
-// arguments passed initial validation.
-func StartWithTimeout(timeout time.Duration) error {
-	if timeout <= 0 {
-		return fmt.Errorf("%w: timeout must be greater than zero", ErrInvalidArgument)
-	}
 	events := make(chan tirtcclib.SystemEvent, 1)
 	cbs := callbacks(func(event int, _ []byte) {
 		switch systemEvent := tirtcclib.SystemEvent(event); systemEvent {
@@ -49,7 +40,7 @@ func StartWithTimeout(timeout time.Duration) error {
 		return err
 	}
 
-	timer := time.NewTimer(timeout)
+	timer := time.NewTimer(startTimeout)
 	defer timer.Stop()
 	select {
 	case event := <-events:
@@ -58,7 +49,7 @@ func StartWithTimeout(timeout time.Duration) error {
 		}
 		return ErrStoppedBeforeStart
 	case <-timer.C:
-		return fmt.Errorf("%w after %s", ErrStartTimeout, timeout)
+		return fmt.Errorf("%w after %s", ErrStartTimeout, startTimeout)
 	}
 }
 

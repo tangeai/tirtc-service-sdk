@@ -3,7 +3,6 @@ package tirtcx
 import "errors"
 
 var (
-	ErrInvalidArgument    = errors.New("tirtcx: invalid argument")
 	ErrNilWhipAcceptor    = errors.New("tirtcx: nil WHIP acceptor")
 	ErrNilConn            = errors.New("tirtcx: nil conn")
 	ErrNilWhipSession     = errors.New("tirtcx: nil WHIP session")
