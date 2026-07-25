@@ -17,6 +17,14 @@ Go SDK 位于 `go/`，分为四层：
 
 仓库包含用于最小接入的 `go/examples/quick-start`，以及展示 Stats、Observer、Metrics 和结构化日志的 `go/examples/observable-service`。
 
+## 日志
+
+Go SDK 和 `whipecho` 使用标准库 `log/slog`。应用可在启动时调用 `slog.SetDefault`，统一配置日志格式、等级和输出位置；`whipecho.Options.Logger` 仅用于需要独立日志配置时覆盖默认 Logger。
+
+`tirtcx.SetNativeLogLevel` 只控制 TiRTC 原生库的日志等级，应在 `tirtcx.Init` 前调用，不影响 Go `slog` 日志。
+
+当 TiRTC 回调携带的连接句柄无法匹配到 `Conn` 时，`tirtcx` 会通过 `slog.Default()` 输出包含 `component`、`event` 和 `handle` 的警告日志。日志不包含媒体内容、Token 或业务数据。
+
 ## clib 映射
 
 底层封装有意保留 C 风格名称：
@@ -45,8 +53,6 @@ int TiRtcWhipAccept(const char *offer, int offer_len,
 ## Conn 使用方式
 
 ```go
-acceptor := tirtcx.NewWhipAcceptor("203.0.113.10") // candidate 可选
-
 if err := tirtcx.Init(); err != nil {
     return err
 }
@@ -55,6 +61,8 @@ if err := tirtcx.Start(); err != nil {
     return err
 }
 defer tirtcx.Stop()
+
+acceptor := tirtcx.NewWhipAcceptor("203.0.113.10") // candidate 可选
 
 // 外层 HTTP Handler 已通过 BearerInterceptor。
 acceptContext, cancelAccept := context.WithTimeout(r.Context(), 10*time.Second)

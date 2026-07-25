@@ -1,9 +1,12 @@
 package tirtcx
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -222,6 +225,44 @@ func TestSubscribeHandlerPanicReturnsDefault(t *testing.T) {
 		panic("failed")
 	}, 1); result != 0 {
 		t.Fatalf("subscribe result = %d, want 0", result)
+	}
+}
+
+func TestUnknownConnCallbackLogsWarning(t *testing.T) {
+	var output bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&output, nil)))
+	defer slog.SetDefault(previousLogger)
+
+	var raw byte
+	handle := tirtcclib.ConnHandle(unsafe.Pointer(&raw))
+	callbacks().OnAudio(handle, tirtcclib.FrameInfo{}, nil)
+
+	logOutput := output.String()
+	for _, want := range []string{
+		`level=WARN`,
+		`msg="callback received for unknown connection"`,
+		`component=tirtcx`,
+		`event=audio`,
+	} {
+		if !strings.Contains(logOutput, want) {
+			t.Fatalf("log output %q does not contain %q", logOutput, want)
+		}
+	}
+}
+
+func TestUnknownConnSubscribeIsRejected(t *testing.T) {
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	defer slog.SetDefault(previousLogger)
+
+	var raw byte
+	handle := tirtcclib.ConnHandle(unsafe.Pointer(&raw))
+	if result := callbacks().OnSubscribeVideo(handle, 1); result == 0 {
+		t.Fatal("unknown connection video subscription was accepted")
+	}
+	if result := callbacks().OnSubscribeAudio(handle, 1); result == 0 {
+		t.Fatal("unknown connection audio subscription was accepted")
 	}
 }
 

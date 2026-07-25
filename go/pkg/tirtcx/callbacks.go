@@ -1,6 +1,8 @@
 package tirtcx
 
 import (
+	"fmt"
+	"log/slog"
 	"sync"
 
 	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/internal/tirtcclib"
@@ -13,7 +15,7 @@ var (
 func callbacks() *tirtcclib.Callbacks {
 	return &tirtcclib.Callbacks{
 		OnConnError: func(hconn tirtcclib.ConnHandle, errorCode int) {
-			if conn := lookupConn(hconn); conn != nil {
+			if conn := lookupConnForCallback(hconn, "connection_error"); conn != nil {
 				err := tirtcclib.ErrorFromCode(errorCode)
 				if sendToChan(conn.errorCh, err) {
 					conn.eventStats.errorDropped.Add(1)
@@ -22,7 +24,7 @@ func callbacks() *tirtcclib.Callbacks {
 			}
 		},
 		OnDisconnected: func(hconn tirtcclib.ConnHandle) {
-			if conn := lookupConn(hconn); conn != nil {
+			if conn := lookupConnForCallback(hconn, "disconnected"); conn != nil {
 				if sendToChan(conn.disconnectedCh, struct{}{}) {
 					conn.eventStats.disconnectedDropped.Add(1)
 				}
@@ -36,61 +38,61 @@ func callbacks() *tirtcclib.Callbacks {
 			connRegistry.Delete(hconn)
 		},
 		OnAudio: func(hconn tirtcclib.ConnHandle, info tirtcclib.FrameInfo, data []byte) {
-			if conn := lookupConn(hconn); conn != nil {
+			if conn := lookupConnForCallback(hconn, "audio"); conn != nil {
 				if sendToChan(conn.audioCh, AudioFrame{Info: info, Data: data}) {
 					conn.eventStats.audioDropped.Add(1)
 				}
 			}
 		},
 		OnVideo: func(hconn tirtcclib.ConnHandle, info tirtcclib.FrameInfo, data []byte) {
-			if conn := lookupConn(hconn); conn != nil {
+			if conn := lookupConnForCallback(hconn, "video"); conn != nil {
 				if sendToChan(conn.videoCh, VideoFrame{Info: info, Data: data}) {
 					conn.eventStats.videoDropped.Add(1)
 				}
 			}
 		},
 		OnMessage: func(hconn tirtcclib.ConnHandle, info tirtcclib.FrameInfo, data []byte) {
-			if conn := lookupConn(hconn); conn != nil {
+			if conn := lookupConnForCallback(hconn, "message"); conn != nil {
 				if sendToChan(conn.messageCh, MessageFrame{Info: info, Data: data}) {
 					conn.eventStats.messageDropped.Add(1)
 				}
 			}
 		},
 		OnCommand: func(hconn tirtcclib.ConnHandle, cmd uint32, data []byte) {
-			if conn := lookupConn(hconn); conn != nil {
+			if conn := lookupConnForCallback(hconn, "command"); conn != nil {
 				if sendToChan(conn.commandCh, Command{Cmd: cmd, Data: data}) {
 					conn.eventStats.commandDropped.Add(1)
 				}
 			}
 		},
 		OnRequestKeyFrame: func(hconn tirtcclib.ConnHandle, streamID uint8) {
-			if conn := lookupConn(hconn); conn != nil {
+			if conn := lookupConnForCallback(hconn, "request_key_frame"); conn != nil {
 				if sendToChan(conn.requestKeyFrameCh, streamID) {
 					conn.eventStats.requestKeyFrameDropped.Add(1)
 				}
 			}
 		},
 		OnSubscribeVideo: func(hconn tirtcclib.ConnHandle, streamID uint8) int {
-			if conn := lookupConn(hconn); conn != nil {
+			if conn := lookupConnForCallback(hconn, "subscribe_video"); conn != nil {
 				return callSubscribeHandler(conn.subscribeVideo, streamID)
 			}
-			return 0
+			return -1
 		},
 		OnUnsubscribeVideo: func(hconn tirtcclib.ConnHandle, streamID uint8) {
-			if conn := lookupConn(hconn); conn != nil {
+			if conn := lookupConnForCallback(hconn, "unsubscribe_video"); conn != nil {
 				if sendToChan(conn.unsubscribeVideoCh, streamID) {
 					conn.eventStats.unsubscribeVideoDropped.Add(1)
 				}
 			}
 		},
 		OnSubscribeAudio: func(hconn tirtcclib.ConnHandle, streamID uint8) int {
-			if conn := lookupConn(hconn); conn != nil {
+			if conn := lookupConnForCallback(hconn, "subscribe_audio"); conn != nil {
 				return callSubscribeHandler(conn.subscribeAudio, streamID)
 			}
-			return 0
+			return -1
 		},
 		OnUnsubscribeAudio: func(hconn tirtcclib.ConnHandle, streamID uint8) {
-			if conn := lookupConn(hconn); conn != nil {
+			if conn := lookupConnForCallback(hconn, "unsubscribe_audio"); conn != nil {
 				if sendToChan(conn.unsubscribeAudioCh, streamID) {
 					conn.eventStats.unsubscribeAudioDropped.Add(1)
 				}
@@ -141,4 +143,17 @@ func lookupConn(hconn tirtcclib.ConnHandle) *Conn {
 		return nil
 	}
 	return val.(*Conn)
+}
+
+func lookupConnForCallback(hconn tirtcclib.ConnHandle, event string) *Conn {
+	conn := lookupConn(hconn)
+	if conn == nil {
+		slog.Warn(
+			"callback received for unknown connection",
+			"component", "tirtcx",
+			"event", event,
+			"handle", fmt.Sprintf("%p", hconn),
+		)
+	}
+	return conn
 }

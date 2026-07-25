@@ -33,6 +33,7 @@ func main() {
 	flag.Parse()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
 	metrics := &observedMetrics{}
 	verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{*accessKey: *publicKey})
 	if err != nil {
@@ -72,6 +73,17 @@ func main() {
 		},
 	}
 
+	if err := tirtcx.Init(); err != nil {
+		logger.Error("initialize TiRTC-X", "error", err)
+		return
+	}
+	defer tirtcx.Uninit()
+	if err := tirtcx.Start(); err != nil {
+		logger.Error("start TiRTC-X", "error", err)
+		return
+	}
+	defer tirtcx.Stop()
+
 	mux := http.NewServeMux()
 	acceptor := tirtcx.NewWhipAcceptor(*candidate)
 	echo, err := whipecho.NewHTTPAdapter(
@@ -92,17 +104,6 @@ func main() {
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, _ *http.Request) {
 		writeMetrics(w, echo.Stats(), metrics)
 	})
-
-	if err := tirtcx.Init(); err != nil {
-		logger.Error("initialize TiRTC-X", "error", err)
-		return
-	}
-	defer tirtcx.Uninit()
-	if err := tirtcx.Start(); err != nil {
-		logger.Error("start TiRTC-X", "error", err)
-		return
-	}
-	defer tirtcx.Stop()
 
 	server := &http.Server{
 		Addr:              *listen,

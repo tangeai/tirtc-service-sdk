@@ -24,11 +24,23 @@ func main() {
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
 	verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{*accessKey: *publicKey})
 	if err != nil {
 		logger.Error("create token verifier", "error", err)
 		return
 	}
+	if err := tirtcx.Init(); err != nil {
+		logger.Error("initialize TiRTC-X", "error", err)
+		return
+	}
+	defer tirtcx.Uninit()
+	if err := tirtcx.Start(); err != nil {
+		logger.Error("start TiRTC-X", "error", err)
+		return
+	}
+	defer tirtcx.Stop()
+
 	mux := http.NewServeMux()
 	acceptor := tirtcx.NewWhipAcceptor(*candidate)
 	business := newMediaService(acceptor, "/whip/resource", logger)
@@ -43,17 +55,6 @@ func main() {
 	mux.HandleFunc("POST /whip", auth(echo.Wrap(business)))
 	mux.HandleFunc("DELETE /whip/resource/{session_id}", business.deleteResource)
 	mux.HandleFunc("DELETE /whip/echo/resource/{session_id}", echo.DeleteHandler())
-
-	if err := tirtcx.Init(); err != nil {
-		logger.Error("initialize TiRTC-X", "error", err)
-		return
-	}
-	defer tirtcx.Uninit()
-	if err := tirtcx.Start(); err != nil {
-		logger.Error("start TiRTC-X", "error", err)
-		return
-	}
-	defer tirtcx.Stop()
 
 	server := &http.Server{
 		Addr:              *listen,

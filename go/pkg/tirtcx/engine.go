@@ -7,9 +7,9 @@ func Init() error {
 	return tirtcclib.TiRtcInit()
 }
 
-// SetLogLevel configures TiRTC logging. Levels above 10 also enable TGTRP
-// logging at level-10 and should be set before Init.
-func SetLogLevel(level int) {
+// SetNativeLogLevel configures native TiRTC logging. Levels above 10 also
+// enable TGTRP logging at level-10 and should be set before Init.
+func SetNativeLogLevel(level int) {
 	tirtcclib.TiRtcLogSetLevel(level)
 }
 

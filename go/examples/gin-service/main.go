@@ -45,11 +45,23 @@ func main() {
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
 	verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{*accessKey: *publicKey})
 	if err != nil {
 		logger.Error("create token verifier", "error", err)
 		return
 	}
+	if err := tirtcx.Init(); err != nil {
+		logger.Error("initialize TiRTC-X", "error", err)
+		return
+	}
+	defer tirtcx.Uninit()
+	if err := tirtcx.Start(); err != nil {
+		logger.Error("start TiRTC-X", "error", err)
+		return
+	}
+	defer tirtcx.Stop()
+
 	acceptor := tirtcx.NewWhipAcceptor(*candidate)
 	business := &businessService{
 		acceptor: acceptor,
@@ -75,17 +87,6 @@ func main() {
 	)
 	whip.DELETE("/resource/:session_id", business.deleteResource)
 	whip.DELETE("/echo/resource/:session_id", echoDeleteHandler(echo))
-
-	if err := tirtcx.Init(); err != nil {
-		logger.Error("initialize TiRTC-X", "error", err)
-		return
-	}
-	defer tirtcx.Uninit()
-	if err := tirtcx.Start(); err != nil {
-		logger.Error("start TiRTC-X", "error", err)
-		return
-	}
-	defer tirtcx.Stop()
 
 	server := &http.Server{
 		Addr:              *listen,
