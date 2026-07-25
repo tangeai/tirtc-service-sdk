@@ -56,7 +56,7 @@ func main() {
 		return
 	}
 	defer tirtcx.Uninit()
-	if err := tirtcx.Start(); err != nil {
+	if err := tirtcx.Start(context.Background()); err != nil {
 		logger.Error("start TiRTC-X", "error", err)
 		return
 	}

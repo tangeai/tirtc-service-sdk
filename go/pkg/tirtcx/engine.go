@@ -1,16 +1,12 @@
 package tirtcx
 
 import (
-	"fmt"
-	"time"
+	"context"
 
 	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/internal/tirtcclib"
 )
 
-var (
-	nativeStart  = tirtcclib.TiRtcStart
-	startTimeout = 15 * time.Second
-)
+var nativeStart = tirtcclib.TiRtcStart
 
 // Init maps to TiRtcInit and registers SDK callbacks through Start.
 func Init() error {
@@ -25,7 +21,10 @@ func SetNativeLogLevel(level int) {
 
 // Start starts TiRTC in WHIP service mode and waits until the native SDK
 // reports TIRTC_EVENT_SYS_STARTED.
-func Start() error {
+func Start(ctx context.Context) error {
+	if ctx == nil {
+		return ErrNilContext
+	}
 	events := make(chan tirtcclib.SystemEvent, 1)
 	cbs := callbacks(func(event int, _ []byte) {
 		switch systemEvent := tirtcclib.SystemEvent(event); systemEvent {
@@ -40,16 +39,14 @@ func Start() error {
 		return err
 	}
 
-	timer := time.NewTimer(startTimeout)
-	defer timer.Stop()
 	select {
 	case event := <-events:
 		if event == tirtcclib.TiRtcEventSystemStarted {
 			return nil
 		}
 		return ErrStoppedBeforeStart
-	case <-timer.C:
-		return fmt.Errorf("%w after %s", ErrStartTimeout, startTimeout)
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

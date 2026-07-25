@@ -57,7 +57,7 @@ if err := tirtcx.Init(); err != nil {
     return err
 }
 defer tirtcx.Uninit()
-if err := tirtcx.Start(); err != nil {
+if err := tirtcx.Start(context.Background()); err != nil {
     return err
 }
 defer tirtcx.Stop()
