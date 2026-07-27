@@ -53,8 +53,8 @@ func ErrorFromCode(code int) error {
 	return fmt.Errorf("tirtcclib: error code %d", code)
 }
 
-// errorFromSendResult maps media send results, where positive values are the
-// number of bytes accepted and negative values are TIRTC_E_* errors.
+// errorFromSendResult maps media and command send results, where positive
+// values are the number of bytes accepted and negative values are TIRTC_E_* errors.
 func errorFromSendResult(result int) error {
 	if result >= 0 {
 		return nil

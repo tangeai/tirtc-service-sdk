@@ -206,7 +206,12 @@ func TiRtcSendCommand(hconn ConnHandle, cmd uint32, data []byte) error {
 		ptr = C.CBytes(data)
 		defer C.free(ptr)
 	}
-	return ErrorFromCode(int(C.TiRtcSendCommand(C.tirtc_conn_t(hconn), C.uint32_t(cmd), ptr, C.uint32_t(len(data)))))
+	return errorFromSendResult(int(C.TiRtcSendCommand(
+		C.tirtc_conn_t(hconn),
+		C.uint32_t(cmd),
+		ptr,
+		C.uint32_t(len(data)),
+	)))
 }
 
 // TiRtcGetSendBufferUsed maps to tiRTC.h TiRtcGetSendBufferUsed.
