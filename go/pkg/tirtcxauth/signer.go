@@ -2,9 +2,7 @@ package tirtcxauth
 
 import (
 	"crypto/ed25519"
-	"crypto/rand"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,7 +19,6 @@ var (
 	ErrTokenSubject     = errors.New("tirtcxauth: token subject mismatch")
 	ErrTokenIssuer      = errors.New("tirtcxauth: token issuer mismatch")
 	ErrTokenSignature   = errors.New("tirtcxauth: token signature mismatch")
-	ErrTokenNonce       = errors.New("tirtcxauth: token nonce rejected")
 )
 
 // TokenIssuer signs TiRTC-X WHIP tokens.
@@ -39,21 +36,8 @@ type ed25519TokenIssuer struct {
 }
 
 type ed25519TokenVerifier struct {
-	publicKeys  map[string]ed25519.PublicKey
-	now         func() time.Time
-	verifyNonce NonceVerifier
-}
-
-// NonceVerifier validates a verified token nonce. It can be backed by Redis or
-// another shared store to reject replayed tokens.
-type NonceVerifier func(*TokenClaims) error
-
-type TokenVerifierOption func(*ed25519TokenVerifier)
-
-func WithNonceVerifier(fn NonceVerifier) TokenVerifierOption {
-	return func(v *ed25519TokenVerifier) {
-		v.verifyNonce = fn
-	}
+	publicKeys map[string]ed25519.PublicKey
+	now        func() time.Time
 }
 
 // NewEd25519TokenIssuer creates a token issuer from access-key to private-key mappings.
@@ -76,7 +60,7 @@ func NewEd25519TokenIssuer(privateKeys map[string]string) (TokenIssuer, error) {
 //
 // Key values may be PEM PKIX Ed25519 public keys or raw base64/base64url/hex
 // Ed25519 public keys.
-func NewEd25519TokenVerifier(publicKeys map[string]string, opts ...TokenVerifierOption) (TokenVerifier, error) {
+func NewEd25519TokenVerifier(publicKeys map[string]string) (TokenVerifier, error) {
 	parsed := make(map[string]ed25519.PublicKey, len(publicKeys))
 	for accessKey, raw := range publicKeys {
 		key, err := parseEd25519PublicKey(raw)
@@ -88,9 +72,6 @@ func NewEd25519TokenVerifier(publicKeys map[string]string, opts ...TokenVerifier
 	verifier := &ed25519TokenVerifier{
 		publicKeys: parsed,
 		now:        time.Now,
-	}
-	for _, opt := range opts {
-		opt(verifier)
 	}
 	return verifier, nil
 }
@@ -112,7 +93,6 @@ func (i *ed25519TokenIssuer) Issue(service, accessKey, deviceID, queryString str
 		Issuer:    accessKey,
 		IssuedAt:  now.Unix(),
 		ExpiresAt: now.Add(ttl).Unix(),
-		Nonce:     randomNonce(),
 	}
 	payload, err := json.Marshal(claims)
 	if err != nil {
@@ -164,18 +144,5 @@ func (v *ed25519TokenVerifier) Verify(service, deviceID, queryString, token stri
 	if claims.ExpiresAt <= now {
 		return nil, ErrTokenExpired
 	}
-	if v.verifyNonce != nil {
-		if err := v.verifyNonce(&claims); err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrTokenNonce, err)
-		}
-	}
 	return &claims, nil
-}
-
-func randomNonce() string {
-	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return fmt.Sprintf("%d", time.Now().UnixNano())
-	}
-	return hex.EncodeToString(b[:])
 }

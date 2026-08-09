@@ -4,7 +4,7 @@ package tirtcclib
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/../../../clib/include/tirtc
-#cgo LDFLAGS: -L${SRCDIR}/../../../clib/lib -lTiRTC -lm -Wl,-rpath,${SRCDIR}/../../../clib/lib
+#cgo LDFLAGS: ${SRCDIR}/../../../clib/lib/libTiRTC.a -lm -ldl
 #include <stdlib.h>
 #include "tiRTC.h"
 
@@ -35,6 +35,11 @@ type whipCallbacks struct {
 // TiRtcGetVersion maps to tiRTC.h TiRtcGetVersion.
 func TiRtcGetVersion() string {
 	return C.GoString(C.TiRtcGetVersion())
+}
+
+// TiRtcLogSetLevel maps to tiRTC.h TiRtcLogSetLevel.
+func TiRtcLogSetLevel(level int) {
+	C.TiRtcLogSetLevel(C.int(level))
 }
 
 // TiRtcInit maps to tiRTC.h TiRtcInit.
@@ -77,7 +82,12 @@ func TiRtcSetOption(option Option, value []byte) error {
 }
 
 // TiRtcWhipAccept maps to tiRTC.h TiRtcWhipAccept.
-func TiRtcWhipAccept(offer []byte, candidate string, onSDP WhipServerOnSDPReadyCallback, cb ConnectCallback) error {
+func TiRtcWhipAccept(
+	offer []byte,
+	candidate string,
+	onSDP WhipServerOnSDPReadyCallback,
+	cb ConnectCallback,
+) (func(), error) {
 	key := C.malloc(1)
 	whipRegistryMu.Lock()
 	whipRegistry[key] = whipCallbacks{onSDP: onSDP, cb: cb}
@@ -99,8 +109,28 @@ func TiRtcWhipAccept(offer []byte, candidate string, onSDP WhipServerOnSDPReadyC
 		delete(whipRegistry, key)
 		whipRegistryMu.Unlock()
 		C.free(key)
+		return nil, ErrorFromCode(int(ret))
 	}
-	return ErrorFromCode(int(ret))
+	var cancelOnce sync.Once
+	cancel := func() {
+		cancelOnce.Do(func() {
+			whipRegistryMu.Lock()
+			entry, ok := whipRegistry[key]
+			if ok {
+				entry.onSDP = nil
+				entry.cb = func(_ int, hconn ConnHandle) {
+					if hconn != nil {
+						go func() {
+							_ = TiRtcDisconnect(hconn)
+						}()
+					}
+				}
+				whipRegistry[key] = entry
+			}
+			whipRegistryMu.Unlock()
+		})
+	}
+	return cancel, nil
 }
 
 // TiRtcWhipConnect maps to tiRTC.h TiRtcWhipConnect.
@@ -136,21 +166,21 @@ func TiRtcDisconnect(hconn ConnHandle) error {
 func TiRtcSendMessageStream(hconn ConnHandle, info FrameInfo, frame []byte) error {
 	cInfo, ptr, cleanup := frameArgs(info, frame)
 	defer cleanup()
-	return ErrorFromCode(int(C.TiRtcSendMessageStream(C.tirtc_conn_t(hconn), &cInfo, ptr)))
+	return errorFromSendResult(int(C.TiRtcSendMessageStream(C.tirtc_conn_t(hconn), &cInfo, ptr)))
 }
 
 // TiRtcSendVideoStream maps to tiRTC.h TiRtcSendVideoStream.
 func TiRtcSendVideoStream(hconn ConnHandle, info FrameInfo, frame []byte) error {
 	cInfo, ptr, cleanup := frameArgs(info, frame)
 	defer cleanup()
-	return ErrorFromCode(int(C.TiRtcSendVideoStream(C.tirtc_conn_t(hconn), &cInfo, ptr)))
+	return errorFromSendResult(int(C.TiRtcSendVideoStream(C.tirtc_conn_t(hconn), &cInfo, ptr)))
 }
 
 // TiRtcSendAudioStream maps to tiRTC.h TiRtcSendAudioStream.
 func TiRtcSendAudioStream(hconn ConnHandle, info FrameInfo, frame []byte) error {
 	cInfo, ptr, cleanup := frameArgs(info, frame)
 	defer cleanup()
-	return ErrorFromCode(int(C.TiRtcSendAudioStream(C.tirtc_conn_t(hconn), &cInfo, ptr)))
+	return errorFromSendResult(int(C.TiRtcSendAudioStream(C.tirtc_conn_t(hconn), &cInfo, ptr)))
 }
 
 func frameArgs(info FrameInfo, frame []byte) (C.TIRTCFRAMEINFO, unsafe.Pointer, func()) {
@@ -176,7 +206,12 @@ func TiRtcSendCommand(hconn ConnHandle, cmd uint32, data []byte) error {
 		ptr = C.CBytes(data)
 		defer C.free(ptr)
 	}
-	return ErrorFromCode(int(C.TiRtcSendCommand(C.tirtc_conn_t(hconn), C.uint32_t(cmd), ptr, C.uint32_t(len(data)))))
+	return errorFromSendResult(int(C.TiRtcSendCommand(
+		C.tirtc_conn_t(hconn),
+		C.uint32_t(cmd),
+		ptr,
+		C.uint32_t(len(data)),
+	)))
 }
 
 // TiRtcGetSendBufferUsed maps to tiRTC.h TiRtcGetSendBufferUsed.

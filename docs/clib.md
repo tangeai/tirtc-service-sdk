@@ -1,31 +1,41 @@
 # clib
 
-`clib/` is the shared TiRTC C API layer used by language SDKs.
+`clib/` 是各语言 SDK 共用的 TiRTC C API 层。
 
-Language SDKs should depend on the public `tiRTC.h` API only. Do not expose or
-require any lower-level C headers from this repository.
+各语言 SDK 只应依赖公开的 `tiRTC.h` API，不应暴露或要求使用本仓库中更底层的 C 头文件。
 
-Current headers:
+当前头文件：
 
 - `clib/include/tirtc/tiRTC.h`
 - `clib/include/tirtc/basedef.h`
 
-The Go SDK's `pkg/tirtcclib` package is a direct wrapper for this layer. It
-keeps exported Go identifiers aligned with the C API names, such as
-`TiRtcWhipAccept` and `TiRtcWhipConnect`.
+Go SDK 的 `internal/tirtcclib` 包直接封装这一层。它是 `pkg/tirtcx` 的内部实现，应用无法直接导入。
+Python SDK 的 `tirtcx` 包通过 `ctypes` 加载 TiRTC 动态库，不向应用暴露 C 结构体。
 
-## Native Libraries
+## 原生库
 
-The Go SDK links against the native TiRTC library under `clib/lib`:
+本 Git 仓库不保存原生库二进制文件。请从以下地址下载 SDK：
 
-- `libTiRTC.so` or `libTiRTC.a`
+```text
+https://repo-sdk.tange-ai.com/repository/tirtc-sdks/ci/linux-x86_64-desktop/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard.tgz
+```
 
-Build Go code against the real clib wrapper with:
+安装命令见 `clib/README.md`。Go SDK 需要：
+
+- `libTiRTC.a`
+- `libwebrtc.so`（TiRTC SDK 的运行时依赖）
+
+应将 `libwebrtc.so` 与服务程序部署在同一目录，或将其目录加入 `LD_LIBRARY_PATH`。Linux 静态构建还会链接 `libdl`，Go 封装会自动配置该依赖。
+
+使用真实 clib 封装构建 Go 代码：
 
 ```bash
 cd go
 go build -tags tirtc_clib ./...
 ```
 
-Without the `tirtc_clib` build tag, the Go wrapper compiles as stubs so pure Go
-packages can be tested without native libraries.
+不指定 `tirtc_clib` Build Tag 时，Go 封装会编译为 Stub，使纯 Go 包可以在没有原生库的环境中测试。
+
+Python SDK 使用普通 `pip install .` 安装时，应通过 `TIRTC_PYTHON_LIBRARY`
+指定 `libTiRTC.so` 或 `libTiRTC.dylib` 的绝对路径。只有直接从源码树运行或使用
+editable 安装时，才可将动态库放入 `clib/lib/`。Token 和 HTTP 认证测试不依赖原生库。

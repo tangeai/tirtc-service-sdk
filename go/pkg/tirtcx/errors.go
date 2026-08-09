@@ -3,11 +3,10 @@ package tirtcx
 import "errors"
 
 var (
-	ErrInvalidConfig = errors.New("tirtcx: invalid config")
-	ErrNilWhipServer = errors.New("tirtcx: nil WHIP server")
-	ErrNilConn       = errors.New("tirtcx: nil conn")
-	ErrNilResult     = errors.New("tirtcx: nil WHIP accept result")
-	ErrUnauthorized  = errors.New("tirtcx: unauthorized")
-	ErrAnswerTimeout = errors.New("tirtcx: WHIP answer timeout")
-	ErrConnTimeout   = errors.New("tirtcx: WHIP connection timeout")
+	ErrNilWhipAcceptor    = errors.New("tirtcx: nil WHIP acceptor")
+	ErrNilContext         = errors.New("tirtcx: nil context")
+	ErrNilConn            = errors.New("tirtcx: nil conn")
+	ErrNilWhipSession     = errors.New("tirtcx: nil WHIP session")
+	ErrWhipSessionClosed  = errors.New("tirtcx: WHIP session closed")
+	ErrStoppedBeforeStart = errors.New("tirtcx: stopped before start completed")
 )

@@ -1,100 +1,58 @@
 # whip-sdk Go
 
-Go module for TiRTC WHIP service implementations.
+用于开发 TiRTC WHIP 服务的 Go 模块。
 
-## Packages
+## 包结构
 
-- `pkg/tirtcxauth`: Ed25519 TiRTC-X token issuing and verification.
-- `pkg/tirtcclib`: direct Go wrappers for `clib/include/tirtc/tiRTC.h`.
-- `pkg/tirtcx`: TiRTC `Conn` object and TiRTC-X authenticated WHIP helpers.
+- `pkg/tirtcxauth`：基于 Ed25519 的 TiRTC-X 令牌签发与验证。
+- `internal/tirtcclib`：`clib/include/tirtc/tiRTC.h` 的内部 Go 封装。
+- `pkg/tirtcx`：TiRTC `Conn` 对象和不包含认证策略的 WHIP 辅助能力。
+- `pkg/whipecho`：可嵌入的音频、视频和命令诊断 Echo 会话。
 
-`pkg/tirtcclib` is intentionally a thin layer. Its exported names mirror the C
-API, for example `TiRtcWhipAccept`, `TiRtcSetOption`, and `TiRtcWhipConnect`.
-HTTP, Bearer token validation, session IDs, and timeout behavior belong to
-the application server. The SDK does not design HTTP endpoints, manage WHIP
-Location resources, or implement DELETE termination semantics.
+`internal/tirtcclib` 是精简的内部实现层。应用应使用 `pkg/tirtcx`；Go 的 `internal` 边界会阻止应用直接使用 C API 封装。HTTP、Bearer 令牌验证、会话 ID 和超时策略由应用服务端负责。SDK 不设计 HTTP 入口、不管理 WHIP `Location` 资源，也不定义 DELETE 终止语义。
 
-## Build Tags
+`pkg/whipecho` 是可选的高层能力，提供可组合的 `net/http` 操作，并允许调用方指定 `Location` 前缀。应用负责注册路由，并以标准中间件方式添加认证，详见 [`../docs/echo.md`](../docs/echo.md)。
 
-By default, `pkg/tirtcclib` compiles to stubs returning `tirtcclib.ErrUnavailable`.
-This lets auth and connection-layer tests run on development machines without native
-TiRTC libraries.
+返回的 HTTP 适配器提供并发安全的 `Stats()` 快照，也可以通过可选的观察器接入应用自己的监控系统。
 
-Build the real clib wrapper with:
+## 构建标签
+
+默认情况下，`internal/tirtcclib` 会编译为返回不可用错误的桩实现，使认证和连接层测试可以在没有 TiRTC 原生库的开发环境中运行。
+
+构建真实 clib 封装：
 
 ```bash
 go build -tags tirtc_clib ./...
 ```
 
-The `tirtc_clib` build uses `../clib/include/tirtc/tiRTC.h` as the only C API
-header and links against native TiRTC libraries under `../clib/lib`:
+`tirtc_clib` 构建只使用 `../clib/include/tirtc/tiRTC.h` 作为 C API 头文件。本仓库不提交原生库二进制文件；构建前请按照 [`../clib/README.md`](../clib/README.md) 下载并安装 SDK。Go 封装需要：
 
-- `libTiRTC.so` or `libTiRTC.a`
+- `libTiRTC.a`
+- `libwebrtc.so`（TiRTC SDK 的运行时依赖）
 
-No lower-level C headers are exposed through the Go SDK.
+应将 `libwebrtc.so` 与服务程序部署在同一目录，或将其目录加入 `LD_LIBRARY_PATH`。cgo 封装还会链接 SDK 加载所需的 `libdl`。
 
-## Token Issuer
+Go SDK 不会暴露更底层的 C 头文件。
 
-```go
-issuer, err := tirtcxauth.NewEd25519TokenIssuer(map[string]string{
-    "ak1": privateKeyPEMOrBase64,
-})
-token, err := issuer.Issue("wxvoip", "ak1", "device-1", "b=1&a=2", time.Minute)
-```
+## 使用文档
 
-## Token Verifier
+- [令牌签发、验证与 HTTP 认证](../docs/auth.md)
+- [Go SDK 分层、连接生命周期和 API 示例](../docs/go.md)
+- [Echo 接入和监控](../docs/echo.md)
 
-```go
-verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{
-    "ak1": publicKeyPEMOrBase64,
-})
-claims, err := verifier.Verify("wxvoip", "device-1", "a=2&b=1", token)
-```
+## 示例服务
 
-## TiRTC-X Conn
-
-```go
-client, err := tirtcx.New(tirtcx.Options{
-    Service:   "wxvoip",
-    Verifier:  verifier,
-})
-_ = err
-
-_ = tirtcx.Init()
-defer tirtcx.Uninit()
-_ = tirtcx.Start()
-defer tirtcx.Stop()
-
-deviceID, result := client.WhipAccept(offerSDP, "a=2&b=1", token)
-if result.Err != nil {
-    // handle accept error
-}
-
-// The application owns HTTP behavior, including 201, Location, and DELETE.
-answerSDP := result.AnswerSDP
-
-conn, err := result.WaitConn(30 * time.Second)
-conn.OnAudio(func(frame tirtcx.AudioFrame) {
-    // handle audio
-})
-
-_ = answerSDP
-_ = deviceID
-```
-
-`pkg/tirtcx` wraps TiRTC connection operations and verifies TiRTC-X query/token
-for WHIP accept. It does not provide an HTTP handler.
-
-## Example Service
-
-An example application-owned WHIP service is available at
-`examples/whip-service`. It demonstrates one possible `POST /whip` and
-`DELETE /resource/{id}` integration while keeping that HTTP behavior outside SDK
-packages.
+- `examples/quick-start`：发送生成的音视频，同时提供 Echo 模式的普通 WHIP 业务处理器。
+- `examples/observable-service`：统计、观察器、监控指标、结构化日志和 HTTP 优雅退出。
+- `examples/gin-service`：框架中间件接入。
+- `examples/whip-token-signer`：生成 `peer_id` 和连接令牌。
 
 ```bash
-go run -tags tirtc_clib ./examples/whip-service \
-  -ak ak1 \
-  -sk "$PUBLIC_KEY" \
-  -service wxvoip
+cd examples/quick-start
+go run -tags tirtc_clib . \
+  -access-key ak1 \
+  -public-key "$PUBLIC_KEY" \
+  -service quick-start
 ```
+
+`examples` 使用独立的 `go.mod`，示例专用依赖不会成为 SDK 模块的依赖。

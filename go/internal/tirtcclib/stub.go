@@ -7,6 +7,9 @@ func TiRtcGetVersion() string {
 	return ""
 }
 
+// TiRtcLogSetLevel maps to tiRTC.h TiRtcLogSetLevel.
+func TiRtcLogSetLevel(level int) {}
+
 // TiRtcInit maps to tiRTC.h TiRtcInit.
 func TiRtcInit() error {
 	return ErrUnavailable
@@ -29,8 +32,8 @@ func TiRtcSetOption(option Option, value []byte) error {
 }
 
 // TiRtcWhipAccept maps to tiRTC.h TiRtcWhipAccept.
-func TiRtcWhipAccept(offer []byte, candidate string, onSDP WhipServerOnSDPReadyCallback, cb ConnectCallback) error {
-	return ErrUnavailable
+func TiRtcWhipAccept(offer []byte, candidate string, onSDP WhipServerOnSDPReadyCallback, cb ConnectCallback) (func(), error) {
+	return nil, ErrUnavailable
 }
 
 // TiRtcWhipConnect maps to tiRTC.h TiRtcWhipConnect.

@@ -1,0 +1,9 @@
+/clib/lib/*
+!/clib/lib/.gitkeep
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+/python/build/
+/python/dist/
+/python/src/*.egg-info/

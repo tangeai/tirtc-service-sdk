@@ -1,146 +1,44 @@
 package tirtcx
 
 import (
-	"crypto/ed25519"
-	"encoding/base64"
+	"bytes"
+	"context"
 	"errors"
+	"log/slog"
+	"runtime"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
 
-	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/pkg/tirtcclib"
-	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/pkg/tirtcxauth"
+	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/internal/tirtcclib"
 )
 
-func TestAuthVerifiesQueryAndTokenBeforeAccept(t *testing.T) {
-	publicKey, privateKey, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	issuer, err := tirtcxauth.NewEd25519TokenIssuer(map[string]string{
-		"ak1": base64.RawURLEncoding.EncodeToString(privateKey),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{
-		"ak1": base64.RawURLEncoding.EncodeToString(publicKey),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	server, err := NewWhipServer(Options{
-		Service:  "whip-echo-svc",
-		Verifier: verifier,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	token, err := issuer.Issue("whip-echo-svc", "ak1", "dev-1", "device_id=dev-1&a=2", time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := server.Auth("device_id=dev-1&a=3", token); err == nil {
-		t.Fatal("Auth accepted mismatched query")
-	}
-}
-
-func TestWhipAcceptCallsClibAfterValidToken(t *testing.T) {
-	publicKey, privateKey, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	issuer, err := tirtcxauth.NewEd25519TokenIssuer(map[string]string{
-		"ak1": base64.RawURLEncoding.EncodeToString(privateKey),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{
-		"ak1": base64.RawURLEncoding.EncodeToString(publicKey),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	server, err := NewWhipServer(Options{
-		Service:  "whip-echo-svc",
-		Verifier: verifier,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	token, err := issuer.Issue("whip-echo-svc", "ak1", "dev-1", "device_id=dev-1", time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-	deviceID, err := server.Auth("device_id=dev-1", token)
-	if err != nil {
-		t.Fatalf("Auth: %v", err)
-	}
-	_, err = server.WhipAccept([]byte("v=0\r\n"), ConnEventOptions{})
+func TestWhipAcceptCallsClib(t *testing.T) {
+	acceptor := NewWhipAcceptor("")
+	_, err := acceptor.WhipAccept(context.Background(), []byte("v=0\r\n"), ConnEventOptions{})
 	if !errors.Is(err, tirtcclib.ErrUnavailable) {
 		t.Fatalf("WhipAccept err = %v, want ErrUnavailable from clib stub", err)
-	}
-	if deviceID != "dev-1" {
-		t.Fatalf("deviceID = %q, want dev-1", deviceID)
-	}
-}
-
-func TestAuthReturnsDeviceID(t *testing.T) {
-	publicKey, privateKey, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	issuer, err := tirtcxauth.NewEd25519TokenIssuer(map[string]string{
-		"ak1": base64.RawURLEncoding.EncodeToString(privateKey),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{
-		"ak1": base64.RawURLEncoding.EncodeToString(publicKey),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	server, err := NewWhipServer(Options{
-		Service:  "whip-echo-svc",
-		Verifier: verifier,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	token, err := issuer.Issue("whip-echo-svc", "ak1", "dev-1", "device_id=dev-1", time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-	deviceID, err := server.Auth("device_id=dev-1", token)
-	if err != nil {
-		t.Fatalf("Auth: %v", err)
-	}
-	if deviceID != "dev-1" {
-		t.Fatalf("deviceID = %q, want dev-1", deviceID)
 	}
 }
 
 func TestWhipAcceptCreatesConnWithChannels(t *testing.T) {
 	oldAcceptWHIP := acceptWHIPFunc
 	var audioCh <-chan AudioFrame
-	acceptWHIPFunc = func(conn *Conn, offer []byte, candidate string) (*WhipAcceptResult, error) {
+	acceptWHIPFunc = func(_ context.Context, conn *Conn, offer []byte, candidate string) (*WhipSession, error) {
 		if conn == nil {
 			t.Fatal("WhipAccept passed nil conn")
 		}
 		audioCh = conn.Events().Audio
 		sendToChan(conn.audioCh, AudioFrame{})
-		return &WhipAcceptResult{AnswerSDP: []byte("v=0\r\n")}, nil
+		return &WhipSession{answerSDP: []byte("v=0\r\n")}, nil
 	}
 	defer func() { acceptWHIPFunc = oldAcceptWHIP }()
 
-	server := &WhipServer{}
-	if _, err := server.WhipAccept([]byte("offer"), ConnEventOptions{
+	acceptor := NewWhipAcceptor("")
+	if _, err := acceptor.WhipAccept(context.Background(), []byte("offer"), ConnEventOptions{
 		AudioBuffer: 1,
 	}); err != nil {
 		t.Fatalf("WhipAccept: %v", err)
@@ -154,18 +52,23 @@ func TestWhipAcceptCreatesConnWithChannels(t *testing.T) {
 
 func TestWhipAcceptReturnsAnswer(t *testing.T) {
 	oldAcceptWHIP := acceptWHIPFunc
-	acceptWHIPFunc = func(*Conn, []byte, string) (*WhipAcceptResult, error) {
-		return &WhipAcceptResult{AnswerSDP: []byte("v=0\r\n")}, nil
+	acceptWHIPFunc = func(context.Context, *Conn, []byte, string) (*WhipSession, error) {
+		return &WhipSession{answerSDP: []byte("v=0\r\n")}, nil
 	}
 	defer func() { acceptWHIPFunc = oldAcceptWHIP }()
 
-	server := &WhipServer{}
-	result, err := server.WhipAccept([]byte("offer"), ConnEventOptions{})
+	acceptor := NewWhipAcceptor("")
+	result, err := acceptor.WhipAccept(context.Background(), []byte("offer"), ConnEventOptions{})
 	if err != nil {
 		t.Fatalf("WhipAccept: %v", err)
 	}
-	if string(result.AnswerSDP) != "v=0\r\n" {
-		t.Fatalf("AnswerSDP = %q", result.AnswerSDP)
+	if string(result.AnswerSDP()) != "v=0\r\n" {
+		t.Fatalf("AnswerSDP = %q", result.AnswerSDP())
+	}
+	answer := result.AnswerSDP()
+	answer[0] = 'x'
+	if string(result.AnswerSDP()) != "v=0\r\n" {
+		t.Fatal("AnswerSDP returned mutable session storage")
 	}
 }
 
@@ -197,6 +100,45 @@ func TestBindConnHandleBindsConnSynchronously(t *testing.T) {
 	}
 }
 
+func TestConnCloseAndBindDisconnectExactlyOnce(t *testing.T) {
+	oldDisconnect := disconnectConnFunc
+	defer func() { disconnectConnFunc = oldDisconnect }()
+	var calls atomic.Int64
+	disconnectConnFunc = func(tirtcclib.ConnHandle) error {
+		calls.Add(1)
+		return nil
+	}
+
+	for range 100 {
+		var raw byte
+		handle := tirtcclib.ConnHandle(unsafe.Pointer(&raw))
+		conn := newConn("", ConnEventOptions{})
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			<-start
+			conn.bindHandle(handle)
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			_ = conn.Close()
+			_ = conn.Close()
+		}()
+		close(start)
+		wg.Wait()
+	}
+	deadline := time.Now().Add(time.Second)
+	for calls.Load() != 100 && time.Now().Before(deadline) {
+		runtime.Gosched()
+	}
+	if got := calls.Load(); got != 100 {
+		t.Fatalf("disconnect calls = %d, want 100", got)
+	}
+}
+
 func TestEventChannelBufferMinimum(t *testing.T) {
 	conn := newConn("", ConnEventOptions{
 		AudioBuffer:            1,
@@ -206,9 +148,7 @@ func TestEventChannelBufferMinimum(t *testing.T) {
 		ErrorBuffer:            1,
 		DisconnectedBuffer:     1,
 		RequestKeyFrameBuffer:  1,
-		SubscribeVideoBuffer:   1,
 		UnsubscribeVideoBuffer: 1,
-		SubscribeAudioBuffer:   1,
 		UnsubscribeAudioBuffer: 1,
 	})
 	tests := []struct {
@@ -222,9 +162,7 @@ func TestEventChannelBufferMinimum(t *testing.T) {
 		{name: "Error", cap: cap(conn.errorCh)},
 		{name: "Disconnected", cap: cap(conn.disconnectedCh)},
 		{name: "RequestKeyFrame", cap: cap(conn.requestKeyFrameCh)},
-		{name: "SubscribeVideo", cap: cap(conn.subscribeVideoCh)},
 		{name: "UnsubscribeVideo", cap: cap(conn.unsubscribeVideoCh)},
-		{name: "SubscribeAudio", cap: cap(conn.subscribeAudioCh)},
 		{name: "UnsubscribeAudio", cap: cap(conn.unsubscribeAudioCh)},
 	}
 	for _, tt := range tests {
@@ -258,26 +196,73 @@ func TestEventStatsCountsDroppedEvents(t *testing.T) {
 	}
 }
 
-func TestEventStatsCountsDroppedSubscribeEvents(t *testing.T) {
+func TestSubscribeHandlersReturnSynchronously(t *testing.T) {
 	var raw byte
 	handle := tirtcclib.ConnHandle(unsafe.Pointer(&raw))
-	conn := newConn("", ConnEventOptions{SubscribeVideoBuffer: 1})
-	for range cap(conn.subscribeVideoCh) {
-		conn.subscribeVideoCh <- SubscribeEvent{StreamID: 1, Result: make(chan int, 1)}
-	}
+	conn := newConn("", ConnEventOptions{
+		SubscribeVideoHandler: func(streamID uint8) int {
+			return int(streamID) + 10
+		},
+		SubscribeAudioHandler: func(streamID uint8) int {
+			return int(streamID) + 20
+		},
+	})
 	defer connRegistry.Delete(handle)
 	if _, ok := bindConnHandle(conn, handle); !ok {
 		t.Fatal("bindConnHandle failed")
 	}
 
-	result := callbacks().OnSubscribeVideo(handle, 2)
+	if result := callbacks().OnSubscribeVideo(handle, 2); result != 12 {
+		t.Fatalf("video subscribe result = %d, want 12", result)
+	}
+	if result := callbacks().OnSubscribeAudio(handle, 3); result != 23 {
+		t.Fatalf("audio subscribe result = %d, want 23", result)
+	}
+}
 
-	if result != 0 {
+func TestSubscribeHandlerPanicReturnsDefault(t *testing.T) {
+	if result := callSubscribeHandler(func(uint8) int {
+		panic("failed")
+	}, 1); result != 0 {
 		t.Fatalf("subscribe result = %d, want 0", result)
 	}
-	stats := conn.EventStats()
-	if stats.SubscribeVideoDropped != 1 {
-		t.Fatalf("SubscribeVideoDropped = %d, want 1", stats.SubscribeVideoDropped)
+}
+
+func TestUnknownConnCallbackLogsWarning(t *testing.T) {
+	var output bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&output, nil)))
+	defer slog.SetDefault(previousLogger)
+
+	var raw byte
+	handle := tirtcclib.ConnHandle(unsafe.Pointer(&raw))
+	callbacks().OnAudio(handle, tirtcclib.FrameInfo{}, nil)
+
+	logOutput := output.String()
+	for _, want := range []string{
+		`level=WARN`,
+		`msg="callback received for unknown connection"`,
+		`component=tirtcx`,
+		`event=audio`,
+	} {
+		if !strings.Contains(logOutput, want) {
+			t.Fatalf("log output %q does not contain %q", logOutput, want)
+		}
+	}
+}
+
+func TestUnknownConnSubscribeIsRejected(t *testing.T) {
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	defer slog.SetDefault(previousLogger)
+
+	var raw byte
+	handle := tirtcclib.ConnHandle(unsafe.Pointer(&raw))
+	if result := callbacks().OnSubscribeVideo(handle, 1); result == 0 {
+		t.Fatal("unknown connection video subscription was accepted")
+	}
+	if result := callbacks().OnSubscribeAudio(handle, 1); result == 0 {
+		t.Fatal("unknown connection audio subscription was accepted")
 	}
 }
 
@@ -296,6 +281,14 @@ func TestOnDisconnectedClosesEventChannels(t *testing.T) {
 
 	callbacks().OnDisconnected(handle)
 
+	select {
+	case <-conn.Done():
+	default:
+		t.Fatal("Done remains open after disconnect")
+	}
+	if err := conn.Err(); err != nil {
+		t.Fatalf("Err = %v after normal disconnect", err)
+	}
 	if _, ok := <-events.Disconnected; !ok {
 		t.Fatal("disconnected channel closed before event delivery")
 	}
@@ -307,22 +300,145 @@ func TestOnDisconnectedClosesEventChannels(t *testing.T) {
 	}
 }
 
-func TestNewWhipServerRejectsInvalidConfig(t *testing.T) {
-	if _, err := NewWhipServer(Options{}); !errors.Is(err, ErrInvalidConfig) {
-		t.Fatalf("NewWhipServer err = %v, want ErrInvalidConfig", err)
+func TestOnConnErrorPublishesTerminalError(t *testing.T) {
+	var raw byte
+	handle := tirtcclib.ConnHandle(unsafe.Pointer(&raw))
+	conn := newConn("", ConnEventOptions{ErrorBuffer: 1})
+	defer connRegistry.Delete(handle)
+	if _, ok := bindConnHandle(conn, handle); !ok {
+		t.Fatal("bindConnHandle failed")
+	}
+
+	callbacks().OnConnError(handle, -40007)
+
+	select {
+	case <-conn.Done():
+	default:
+		t.Fatal("Done remains open after connection error")
+	}
+	if !errors.Is(conn.Err(), tirtcclib.ErrConnTimeout) {
+		t.Fatalf("Err = %v, want ErrConnTimeout", conn.Err())
 	}
 }
 
-func TestAuthRejectsNilWhipServer(t *testing.T) {
-	var server *WhipServer
-	if _, err := server.Auth("", ""); !errors.Is(err, ErrNilWhipServer) {
-		t.Fatalf("Auth err = %v, want ErrNilWhipServer", err)
+func TestWhipAcceptRejectsNilAcceptor(t *testing.T) {
+	var acceptor *WhipAcceptor
+	if _, err := acceptor.WhipAccept(context.Background(), nil, ConnEventOptions{}); !errors.Is(err, ErrNilWhipAcceptor) {
+		t.Fatalf("WhipAccept err = %v, want ErrNilWhipAcceptor", err)
 	}
 }
 
-func TestWhipAcceptRejectsNilWhipServer(t *testing.T) {
-	var server *WhipServer
-	if _, err := server.WhipAccept(nil, ConnEventOptions{}); !errors.Is(err, ErrNilWhipServer) {
-		t.Fatalf("WhipAccept err = %v, want ErrNilWhipServer", err)
+func TestWhipAcceptRejectsCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	acceptor := NewWhipAcceptor("")
+	if _, err := acceptor.WhipAccept(ctx, nil, ConnEventOptions{}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("WhipAccept error = %v, want context.Canceled", err)
+	}
+}
+
+func TestAcceptContextCancellationClosesPendingConn(t *testing.T) {
+	conn := newConn("", ConnEventOptions{})
+	var canceled atomic.Int64
+	result := &WhipSession{
+		conn:         conn,
+		connReady:    make(chan struct{}),
+		done:         make(chan struct{}),
+		cancelAccept: func() { canceled.Add(1) },
+	}
+	result.close(context.Canceled)
+	if _, err := result.WaitConn(context.Background()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("WaitConn error = %v, want context.Canceled", err)
+	}
+	if !conn.closeRequested.Load() {
+		t.Fatal("pending conn was not marked for close")
+	}
+	result.close(context.Canceled)
+	if got := canceled.Load(); got != 1 {
+		t.Fatalf("pending accept cancel calls = %d, want 1", got)
+	}
+}
+
+func TestWhipSessionCloseUnblocksWaitConn(t *testing.T) {
+	conn := newConn("", ConnEventOptions{})
+	result := &WhipSession{
+		conn:      conn,
+		connReady: make(chan struct{}),
+		done:      make(chan struct{}),
+	}
+	waitDone := make(chan error, 1)
+	go func() {
+		_, err := result.WaitConn(context.Background())
+		waitDone <- err
+	}()
+
+	if err := result.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	select {
+	case err := <-waitDone:
+		if !errors.Is(err, ErrWhipSessionClosed) {
+			t.Fatalf("WaitConn error = %v, want ErrWhipSessionClosed", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("WaitConn was not unblocked by Close")
+	}
+}
+
+func TestWhipSessionWaitConnIsConcurrentAndRepeatable(t *testing.T) {
+	conn := newConn("", ConnEventOptions{})
+	session := &WhipSession{
+		conn:      conn,
+		connReady: make(chan struct{}),
+		done:      make(chan struct{}),
+	}
+	session.resolveConn(conn, nil)
+
+	const waiters = 8
+	results := make(chan *Conn, waiters)
+	errors := make(chan error, waiters)
+	for range waiters {
+		go func() {
+			got, err := session.WaitConn(context.Background())
+			results <- got
+			errors <- err
+		}()
+	}
+	for range waiters {
+		if err := <-errors; err != nil {
+			t.Fatalf("WaitConn error = %v", err)
+		}
+		if got := <-results; got != conn {
+			t.Fatalf("WaitConn conn = %p, want %p", got, conn)
+		}
+	}
+
+	got, err := session.WaitConn(context.Background())
+	if err != nil {
+		t.Fatalf("repeated WaitConn error = %v", err)
+	}
+	if got != conn {
+		t.Fatalf("repeated WaitConn conn = %p, want %p", got, conn)
+	}
+}
+
+func TestWhipSessionWaitContextDoesNotCloseSession(t *testing.T) {
+	conn := newConn("", ConnEventOptions{})
+	session := &WhipSession{
+		conn:      conn,
+		connReady: make(chan struct{}),
+		done:      make(chan struct{}),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := session.WaitConn(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("WaitConn error = %v, want context.Canceled", err)
+	}
+	if conn.closeRequested.Load() {
+		t.Fatal("canceling one waiter closed the session")
+	}
+	session.resolveConn(conn, nil)
+	if got, err := session.WaitConn(context.Background()); err != nil || got != conn {
+		t.Fatalf("later WaitConn = (%p, %v), want (%p, nil)", got, err, conn)
 	}
 }

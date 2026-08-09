@@ -1,31 +1,28 @@
 # whip-sdk
 
-`whip-sdk` is the multilingual SDK repository for TiRTC WHIP services.
+`whip-sdk` 是用于开发 TiRTC WHIP 服务的多语言 SDK 仓库。
 
-The repository is organized around a shared C API contract and language-specific
-SDKs:
+## 项目结构
 
-- `clib/`: shared TiRTC C headers and native library placement.
-- `go/`: Go SDK implementation. This is the first supported language.
-- `python/`: reserved for a future Python SDK.
-- `docs/`: protocol and SDK notes shared by language implementations.
-- `examples/`: language-specific examples and entry points.
+- [`clib/`](./clib/)：共用的 TiRTC C 头文件、原生库安装说明和本地库目录。
+- [`go/`](./go/)：Go SDK。
+- [`python/`](./python/)：Python SDK。
+- [`docs/`](./docs/)：认证、C API、Go/Python SDK 和 Echo 接入说明。
 
-## Current Status
+## 示例
 
-The Go SDK provides:
+Go 示例位于 [`go/examples/`](./go/examples/)：
 
-- Ed25519 TiRTC-X token issuing and verification.
-- A direct `tiRTC.h` wrapper layer with identifiers aligned to the C API.
-- A TiRTC `Conn` object layer for WHIP accept/connect and connection operations.
+- [`quick-start`](./go/examples/quick-start/)：完整的 WHIP 服务快速开始示例。
+- [`whip-token-signer`](./go/examples/whip-token-signer/)：生成 `peer_id` 和连接令牌。
+- [`gin-service`](./go/examples/gin-service/)：Gin 框架接入示例。
+- [`observable-service`](./go/examples/observable-service/)：日志、统计、观察器和监控指标示例。
 
-The SDK does not own HTTP endpoint design, WHIP `Location` resource management,
-or `DELETE` termination semantics. Application servers should implement those
-parts on top of the SDK.
+运行方法和参数说明见 [Go 示例文档](./go/examples/README.md)。
 
-An example application service is provided under `go/examples/whip-service` to
-show one possible HTTP integration.
+Python 示例位于 [`python/examples/`](./python/examples/)：
 
-The Python SDK is intentionally not implemented yet; its directory is reserved
-so the repository layout remains stable when Python support is added.
+- [`quick_start.py`](./python/examples/quick_start.py)：完整的 WHIP 服务快速开始示例。
+- [`whip_token_signer.py`](./python/examples/whip_token_signer.py)：生成 `peer_id` 和连接令牌。
 
+运行方法和参数说明见 [Python 示例文档](./python/examples/README.md)。

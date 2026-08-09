@@ -7,5 +7,4 @@ type TokenClaims struct {
 	Issuer    string `json:"iss"`
 	IssuedAt  int64  `json:"iat"`
 	ExpiresAt int64  `json:"exp"`
-	Nonce     string `json:"nonce"`
 }

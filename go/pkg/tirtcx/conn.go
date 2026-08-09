@@ -4,14 +4,18 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/pkg/tirtcclib"
+	"gitlab.tange-ai.com/tirtc-nexus/whip-sdk/go/internal/tirtcclib"
 )
+
+var disconnectConnFunc = tirtcclib.TiRtcDisconnect
 
 // MinEventBufferSize is the minimum buffer capacity for enabled Conn event channels.
 const MinEventBufferSize = 4
 
-// ConnEventOptions configures optional per-connection TiRTC event channels.
-// A buffer size <= 0 disables that event channel.
+// ConnEventOptions configures optional per-connection TiRTC event channels and
+// synchronous subscription decisions. A buffer size <= 0 disables that event
+// channel. Subscription handlers run on a native callback and must return
+// quickly; a nil handler or panic returns the default result 0.
 type ConnEventOptions struct {
 	AudioBuffer            int
 	VideoBuffer            int
@@ -20,10 +24,10 @@ type ConnEventOptions struct {
 	ErrorBuffer            int
 	DisconnectedBuffer     int
 	RequestKeyFrameBuffer  int
-	SubscribeVideoBuffer   int
 	UnsubscribeVideoBuffer int
-	SubscribeAudioBuffer   int
 	UnsubscribeAudioBuffer int
+	SubscribeVideoHandler  func(streamID uint8) int
+	SubscribeAudioHandler  func(streamID uint8) int
 }
 
 // ConnEvents exposes read-only event channels owned by Conn.
@@ -35,9 +39,7 @@ type ConnEvents struct {
 	Error            <-chan error
 	Disconnected     <-chan struct{}
 	RequestKeyFrame  <-chan uint8
-	SubscribeVideo   <-chan SubscribeEvent
 	UnsubscribeVideo <-chan uint8
-	SubscribeAudio   <-chan SubscribeEvent
 	UnsubscribeAudio <-chan uint8
 }
 
@@ -48,6 +50,12 @@ type Conn struct {
 
 	candidate      string
 	closeRequested atomic.Bool
+	disconnectOnce sync.Once
+	disconnectErr  error
+	doneCh         chan struct{}
+	terminalOnce   sync.Once
+	terminalMu     sync.RWMutex
+	terminalErr    error
 
 	audioCh            chan AudioFrame
 	videoCh            chan VideoFrame
@@ -56,10 +64,10 @@ type Conn struct {
 	errorCh            chan error
 	disconnectedCh     chan struct{}
 	requestKeyFrameCh  chan uint8
-	subscribeVideoCh   chan SubscribeEvent
 	unsubscribeVideoCh chan uint8
-	subscribeAudioCh   chan SubscribeEvent
 	unsubscribeAudioCh chan uint8
+	subscribeVideo     func(uint8) int
+	subscribeAudio     func(uint8) int
 
 	eventStats      eventCounters
 	closeEventsOnce sync.Once
@@ -73,15 +81,14 @@ type eventCounters struct {
 	errorDropped            atomic.Uint64
 	disconnectedDropped     atomic.Uint64
 	requestKeyFrameDropped  atomic.Uint64
-	subscribeVideoDropped   atomic.Uint64
 	unsubscribeVideoDropped atomic.Uint64
-	subscribeAudioDropped   atomic.Uint64
 	unsubscribeAudioDropped atomic.Uint64
 }
 
 func newConn(candidate string, options ConnEventOptions) *Conn {
 	return &Conn{
 		candidate:          candidate,
+		doneCh:             make(chan struct{}),
 		audioCh:            makeEventChan[AudioFrame](options.AudioBuffer),
 		videoCh:            makeEventChan[VideoFrame](options.VideoBuffer),
 		messageCh:          makeEventChan[MessageFrame](options.MessageBuffer),
@@ -89,10 +96,10 @@ func newConn(candidate string, options ConnEventOptions) *Conn {
 		errorCh:            makeEventChan[error](options.ErrorBuffer),
 		disconnectedCh:     makeEventChan[struct{}](options.DisconnectedBuffer),
 		requestKeyFrameCh:  makeEventChan[uint8](options.RequestKeyFrameBuffer),
-		subscribeVideoCh:   makeEventChan[SubscribeEvent](options.SubscribeVideoBuffer),
 		unsubscribeVideoCh: makeEventChan[uint8](options.UnsubscribeVideoBuffer),
-		subscribeAudioCh:   makeEventChan[SubscribeEvent](options.SubscribeAudioBuffer),
 		unsubscribeAudioCh: makeEventChan[uint8](options.UnsubscribeAudioBuffer),
+		subscribeVideo:     options.SubscribeVideoHandler,
+		subscribeAudio:     options.SubscribeAudioHandler,
 	}
 }
 
@@ -116,10 +123,11 @@ func (c *Conn) Handle() tirtcclib.ConnHandle {
 func (c *Conn) bindHandle(handle tirtcclib.ConnHandle) {
 	c.handleMu.Lock()
 	c.handle = handle
+	closeRequested := c.closeRequested.Load()
 	c.handleMu.Unlock()
-	if c.closeRequested.Load() {
+	if closeRequested {
 		go func() {
-			_ = tirtcclib.TiRtcDisconnect(handle)
+			_ = c.disconnect(handle)
 		}()
 	}
 }
@@ -136,9 +144,7 @@ func (c *Conn) EventStats() EventStats {
 		ErrorDropped:            c.eventStats.errorDropped.Load(),
 		DisconnectedDropped:     c.eventStats.disconnectedDropped.Load(),
 		RequestKeyFrameDropped:  c.eventStats.requestKeyFrameDropped.Load(),
-		SubscribeVideoDropped:   c.eventStats.subscribeVideoDropped.Load(),
 		UnsubscribeVideoDropped: c.eventStats.unsubscribeVideoDropped.Load(),
-		SubscribeAudioDropped:   c.eventStats.subscribeAudioDropped.Load(),
 		UnsubscribeAudioDropped: c.eventStats.unsubscribeAudioDropped.Load(),
 	}
 }
@@ -155,11 +161,40 @@ func (c *Conn) Events() ConnEvents {
 		Error:            c.errorCh,
 		Disconnected:     c.disconnectedCh,
 		RequestKeyFrame:  c.requestKeyFrameCh,
-		SubscribeVideo:   c.subscribeVideoCh,
 		UnsubscribeVideo: c.unsubscribeVideoCh,
-		SubscribeAudio:   c.subscribeAudioCh,
 		UnsubscribeAudio: c.unsubscribeAudioCh,
 	}
+}
+
+// Done is closed when the connection reaches a terminal error or disconnects.
+func (c *Conn) Done() <-chan struct{} {
+	if c == nil {
+		return nil
+	}
+	return c.doneCh
+}
+
+// Err returns the terminal connection error, or nil after a normal disconnect.
+// Callers should read Err after Done is closed.
+func (c *Conn) Err() error {
+	if c == nil {
+		return ErrNilConn
+	}
+	c.terminalMu.RLock()
+	defer c.terminalMu.RUnlock()
+	return c.terminalErr
+}
+
+func (c *Conn) finish(err error) {
+	if c == nil {
+		return
+	}
+	c.terminalOnce.Do(func() {
+		c.terminalMu.Lock()
+		c.terminalErr = err
+		c.terminalMu.Unlock()
+		close(c.doneCh)
+	})
 }
 
 func (c *Conn) closeEventChannels() {
@@ -174,9 +209,7 @@ func (c *Conn) closeEventChannels() {
 		closeEventChan(c.errorCh)
 		closeEventChan(c.disconnectedCh)
 		closeEventChan(c.requestKeyFrameCh)
-		closeEventChan(c.subscribeVideoCh)
 		closeEventChan(c.unsubscribeVideoCh)
-		closeEventChan(c.subscribeAudioCh)
 		closeEventChan(c.unsubscribeAudioCh)
 	})
 }
@@ -228,10 +261,22 @@ func (c *Conn) SendBufferUsed() uint64 {
 }
 
 func (c *Conn) Close() error {
-	handle := c.Handle()
-	if handle == nil {
-		c.closeRequested.Store(true)
+	if c == nil {
 		return nil
 	}
-	return tirtcclib.TiRtcDisconnect(handle)
+	c.handleMu.Lock()
+	c.closeRequested.Store(true)
+	handle := c.handle
+	c.handleMu.Unlock()
+	if handle == nil {
+		return nil
+	}
+	return c.disconnect(handle)
+}
+
+func (c *Conn) disconnect(handle tirtcclib.ConnHandle) error {
+	c.disconnectOnce.Do(func() {
+		c.disconnectErr = disconnectConnFunc(handle)
+	})
+	return c.disconnectErr
 }
