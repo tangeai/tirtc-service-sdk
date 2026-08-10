@@ -38,6 +38,11 @@ type mediaSession struct {
 	whipSession *tirtcx.WhipSession
 }
 
+const (
+	businessAudioStreamID uint8 = 0
+	businessVideoStreamID uint8 = 1
+)
+
 func newMediaService(acceptor whipecho.Acceptor, locationPrefix string, logger *slog.Logger) *mediaService {
 	return &mediaService{
 		acceptor: acceptor, locationPrefix: locationPrefix, logger: logger,
@@ -117,13 +122,12 @@ func (s *mediaService) run(
 	}()
 	connectContext, cancelConnect := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelConnect()
+	defer session.whipSession.Close()
 	conn, err := session.whipSession.WaitConn(connectContext)
 	if err != nil {
 		s.logger.Error("business session failed to connect", "session_id", id, "error", err)
 		return
 	}
-	defer session.whipSession.Close()
-
 	audioTicker := time.NewTicker(20 * time.Millisecond)
 	videoTicker := time.NewTicker(time.Second)
 	defer audioTicker.Stop()
@@ -136,7 +140,7 @@ func (s *mediaService) run(
 		select {
 		case now := <-audioTicker.C:
 			audio := sinePCM(audioFrame)
-			info := tirtcx.FrameInfo{StreamID: 0, Media: tirtcx.AudioPCM, Ts: uint32(now.UnixMilli())}
+			info := tirtcx.FrameInfo{StreamID: businessAudioStreamID, Media: tirtcx.AudioPCM, Ts: uint32(now.UnixMilli())}
 			if err := conn.SendAudio(info, audio); err != nil {
 				s.logger.Error("send business audio", "session_id", id, "error", err)
 				return
@@ -144,7 +148,7 @@ func (s *mediaService) run(
 			audioFrame++
 		case now := <-videoTicker.C:
 			video := syntheticJPEG(videoFrame)
-			info := tirtcx.FrameInfo{StreamID: 0, Media: tirtcx.VideoJPEG, Ts: uint32(now.UnixMilli())}
+			info := tirtcx.FrameInfo{StreamID: businessVideoStreamID, Media: tirtcx.VideoJPEG, Ts: uint32(now.UnixMilli())}
 			if err := conn.SendVideo(info, video); err != nil {
 				s.logger.Error("send business video", "session_id", id, "error", err)
 				return

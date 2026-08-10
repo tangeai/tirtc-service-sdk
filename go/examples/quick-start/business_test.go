@@ -25,3 +25,12 @@ func TestSyntheticJPEG(t *testing.T) {
 		t.Fatalf("JPEG size = %dx%d", config.Width, config.Height)
 	}
 }
+
+func TestBusinessMediaStreamIDsAreDistinctAndValid(t *testing.T) {
+	if businessAudioStreamID == businessVideoStreamID {
+		t.Fatal("audio and video stream IDs must be distinct")
+	}
+	if businessAudioStreamID > 15 || businessVideoStreamID > 15 {
+		t.Fatal("business stream IDs must be in the range 0..15")
+	}
+}
