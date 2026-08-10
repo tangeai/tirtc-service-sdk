@@ -1,6 +1,6 @@
 # 可嵌入的诊断 Echo
 
-Go 的 `pkg/whipecho` 和 Python 的 `whipecho` 提供可以叠加到现有 WHIP HTTP Handler 上的诊断能力。平台内部路由负责选择 Echo 请求，普通请求继续交给应用的业务 Handler。
+`pkg/whipecho` 提供可以叠加到现有 WHIP HTTP Handler 上的诊断能力。平台内部路由负责选择 Echo 请求，普通请求继续交给应用的业务 Handler。
 
 对于被选中的会话，Echo 模式会替代正常业务行为，Echo 组件是 `Conn.Events()` 的唯一消费者。
 
@@ -62,20 +62,17 @@ whip.DELETE("/echo/resource/:session_id", echoDeleteHandler(echo))
 
 ## 示例应用
 
-`go/examples/quick-start` 展示了 Echo 与普通 WHIP 业务 Handler 的组合方式。普通会话接收生成的 PCM 音频和 JPEG 视频，同一入口也提供 Echo 能力：
+`examples/quick-start` 展示了 Echo 与普通 WHIP 业务 Handler 的组合方式。普通会话接收生成的 PCM 音频和 JPEG 视频，同一入口也提供 Echo 能力：
 
 ```bash
-cd go/examples/quick-start
+cd examples/quick-start
 go run -tags tirtc_clib . \
   -service quick-start \
   -access-key "$TIRTC_ACCESS_KEY" \
   -public-key "$TIRTC_PUBLIC_KEY"
 ```
 
-`go/examples/observable-service` 重点展示结构化日志、Stats 快照、Echo/认证 Observer 以及示例 `/metrics` 入口。
-
-Python 的 `HTTPAdapter.try_handle_post` 返回框架无关的 `HTTPResponse`；普通请求返回
-`None`。完整组合见 `python/examples/quick_start.py`。
+`examples/observable-service` 重点展示结构化日志、Stats 快照、Echo/认证 Observer 以及示例 `/metrics` 入口。
 
 ## 监控
 

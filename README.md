@@ -1,28 +1,28 @@
-# whip-sdk
+# TiRTC 自定义 RTC 服务 SDK
 
-`whip-sdk` 是用于开发 TiRTC WHIP 服务的多语言 SDK 仓库。
+`tirtc-service-sdk` 是用于开发 TiRTC 自定义 RTC 服务的 Go SDK。它提供连接认证、WHIP 会话管理、媒体与命令处理，以及 Echo 链路诊断能力。
 
 ## 项目结构
 
-- [`clib/`](./clib/)：共用的 TiRTC C 头文件、原生库安装说明和本地库目录。
-- [`go/`](./go/)：Go SDK。
-- [`python/`](./python/)：Python SDK。
-- [`docs/`](./docs/)：认证、C API、Go/Python SDK 和 Echo 接入说明。
+- [`pkg/tirtcx`](./pkg/tirtcx/)：TiRTC 引擎、连接和 WHIP 会话 API。
+- [`pkg/tirtcxauth`](./pkg/tirtcxauth/)：Ed25519 Token 签发、验证和 HTTP Bearer 认证。
+- [`pkg/whipecho`](./pkg/whipecho/)：可嵌入的 Echo 诊断能力。
+- [`internal/tirtcclib`](./internal/tirtcclib/)：TiRTC 原生库的内部 Go 封装。
+- [`examples/`](./examples/)：快速开始、Gin、可观测服务和 Token 签发示例。
+- [`clib/`](./clib/)：TiRTC C 头文件和原生库安装说明。
+- [`docs/`](./docs/)：认证算法、Go API 分层和 Echo 接入说明。
 
 ## 示例
 
-Go 示例位于 [`go/examples/`](./go/examples/)：
+示例位于 [`examples/`](./examples/)：
 
-- [`quick-start`](./go/examples/quick-start/)：完整的 WHIP 服务快速开始示例。
-- [`whip-token-signer`](./go/examples/whip-token-signer/)：生成 `peer_id` 和连接令牌。
-- [`gin-service`](./go/examples/gin-service/)：Gin 框架接入示例。
-- [`observable-service`](./go/examples/observable-service/)：日志、统计、观察器和监控指标示例。
+- [`quick-start`](./examples/quick-start/)：完整的自定义 RTC 服务快速开始示例。
+- [`whip-token-signer`](./examples/whip-token-signer/)：生成 `peer_id` 和连接 Token。
+- [`gin-service`](./examples/gin-service/)：Gin 框架接入示例。
+- [`observable-service`](./examples/observable-service/)：日志、统计、观察器和监控指标示例。
 
-运行方法和参数说明见 [Go 示例文档](./go/examples/README.md)。
+运行方法和参数说明见[示例文档](./examples/README.md)。安装 TiRTC 原生库后，使用 `tirtc_clib` 构建标签编译真实服务；不使用该标签时可以运行纯 Go 单元测试。
 
-Python 示例位于 [`python/examples/`](./python/examples/)：
-
-- [`quick_start.py`](./python/examples/quick_start.py)：完整的 WHIP 服务快速开始示例。
-- [`whip_token_signer.py`](./python/examples/whip_token_signer.py)：生成 `peer_id` 和连接令牌。
-
-运行方法和参数说明见 [Python 示例文档](./python/examples/README.md)。
+```bash
+make test
+```
