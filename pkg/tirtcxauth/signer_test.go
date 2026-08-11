@@ -264,11 +264,63 @@ func TestEd25519TokenVerifyRejectsExpiredToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	token, err := issuer.Issue("wxvoip", "ak1", "dev1", "a=2", -time.Second)
+	token, err := issuer.Issue("wxvoip", "ak1", "dev1", "a=2", time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
+	verifier.(*ed25519TokenVerifier).now = func() time.Time {
+		return time.Now().Add(2 * time.Second)
+	}
 	if _, err := verifier.Verify("wxvoip", "dev1", "a=2", token); !errors.Is(err, ErrTokenExpired) {
 		t.Fatalf("expired err = %v, want %v", err, ErrTokenExpired)
+	}
+}
+
+func TestEd25519TokenVerifyIgnoresFutureIssuedAt(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer, err := NewEd25519TokenIssuer(map[string]string{
+		"ak1": base64.RawURLEncoding.EncodeToString(privateKey),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier, err := NewEd25519TokenVerifier(map[string]string{
+		"ak1": base64.RawURLEncoding.EncodeToString(publicKey),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	token, err := issuer.Issue("wxvoip", "ak1", "dev1", "a=2", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier.(*ed25519TokenVerifier).now = func() time.Time {
+		return time.Now().Add(-time.Minute)
+	}
+	if _, err := verifier.Verify("wxvoip", "dev1", "a=2", token); err != nil {
+		t.Fatalf("Verify token with future iat: %v", err)
+	}
+}
+
+func TestEd25519TokenIssueRejectsNonPositiveTTL(t *testing.T) {
+	_, privateKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer, err := NewEd25519TokenIssuer(map[string]string{
+		"ak1": base64.RawURLEncoding.EncodeToString(privateKey),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, ttl := range []time.Duration{0, -time.Second} {
+		if _, err := issuer.Issue("wxvoip", "ak1", "dev1", "a=2", ttl); !errors.Is(err, ErrInvalidTTL) {
+			t.Errorf("Issue ttl %s error = %v, want %v", ttl, err, ErrInvalidTTL)
+		}
 	}
 }

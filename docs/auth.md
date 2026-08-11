@@ -29,6 +29,8 @@ Claims：
 }
 ```
 
+`iat` 仅记录 Token 的签发时间，不用于判断 Token 是否已生效。验证器严格根据 `exp` 判断 Token 是否过期，不提供时钟容差。调用 `Issue` 时，`ttl` 必须大于 0；否则返回 `ErrInvalidTTL`。
+
 `canonical_query` 的输入可以包含或省略开头的 `?`。字段使用 `&` 分隔；无效的百分号转义和未转义的分号会被拒绝。按照 `application/x-www-form-urlencoded` 规则解析后：
 
 1. 按参数名的字节序升序排列。

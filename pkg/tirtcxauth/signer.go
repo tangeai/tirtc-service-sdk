@@ -16,8 +16,8 @@ var (
 	// Deprecated: use ErrUnknownCustomRtcKey.
 	ErrUnknownAccessKey = ErrUnknownCustomRtcKey
 	ErrMalformedToken   = errors.New("tirtcxauth: malformed token")
+	ErrInvalidTTL       = errors.New("tirtcxauth: ttl must be positive")
 	ErrTokenExpired     = errors.New("tirtcxauth: token expired")
-	ErrTokenNotYetValid = errors.New("tirtcxauth: token not yet valid")
 	ErrTokenScope       = errors.New("tirtcxauth: token scope mismatch")
 	ErrTokenSubject     = errors.New("tirtcxauth: token subject mismatch")
 	ErrTokenIssuer      = errors.New("tirtcxauth: token issuer mismatch")
@@ -80,6 +80,9 @@ func NewEd25519TokenVerifier(customRtcKeys map[string]string) (TokenVerifier, er
 }
 
 func (i *ed25519TokenIssuer) Issue(service, customRtcKeyID, deviceID, queryString string, ttl time.Duration) (string, error) {
+	if ttl <= 0 {
+		return "", ErrInvalidTTL
+	}
 	privateKey, ok := i.privateKeys[customRtcKeyID]
 	if !ok {
 		return "", ErrUnknownCustomRtcKey
@@ -141,9 +144,6 @@ func (v *ed25519TokenVerifier) Verify(service, deviceID, queryString, token stri
 		return nil, ErrTokenScope
 	}
 	now := v.now().UTC().Unix()
-	if claims.IssuedAt > now {
-		return nil, ErrTokenNotYetValid
-	}
 	if claims.ExpiresAt <= now {
 		return nil, ErrTokenExpired
 	}
