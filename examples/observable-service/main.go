@@ -27,15 +27,15 @@ type observedMetrics struct {
 func main() {
 	listen := flag.String("listen", ":8080", "HTTP listen address")
 	serviceName := flag.String("service", "echo", "registered WHIP service name")
-	accessKey := flag.String("access-key", "", "TiRTC-X access key")
-	publicKey := flag.String("public-key", "", "Ed25519 public key used to verify TiRTC-X tokens")
+	customRtcKeyID := flag.String("custom-rtc-key-id", "", "registered Custom RTC Key ID")
+	customRtcKey := flag.String("custom-rtc-key", "", "registered Ed25519 Custom RTC Key")
 	candidate := flag.String("candidate", "", "optional public candidate address")
 	flag.Parse()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 	metrics := &observedMetrics{}
-	verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{*accessKey: *publicKey})
+	verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{*customRtcKeyID: *customRtcKey})
 	if err != nil {
 		logger.Error("create token verifier", "error", err)
 		return

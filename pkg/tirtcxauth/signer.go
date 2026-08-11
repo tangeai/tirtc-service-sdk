@@ -11,7 +11,10 @@ import (
 )
 
 var (
-	ErrUnknownAccessKey = errors.New("tirtcxauth: unknown access key")
+	ErrUnknownCustomRtcKey = errors.New("tirtcxauth: unknown custom RTC key")
+	// ErrUnknownAccessKey is kept as an alias for backward compatibility.
+	// Deprecated: use ErrUnknownCustomRtcKey.
+	ErrUnknownAccessKey = ErrUnknownCustomRtcKey
 	ErrMalformedToken   = errors.New("tirtcxauth: malformed token")
 	ErrTokenExpired     = errors.New("tirtcxauth: token expired")
 	ErrTokenNotYetValid = errors.New("tirtcxauth: token not yet valid")
@@ -23,7 +26,7 @@ var (
 
 // TokenIssuer signs TiRTC-X WHIP tokens.
 type TokenIssuer interface {
-	Issue(service, accessKey, deviceID, queryString string, ttl time.Duration) (string, error)
+	Issue(service, customRtcKeyID, deviceID, queryString string, ttl time.Duration) (string, error)
 }
 
 // TokenVerifier verifies TiRTC-X WHIP tokens.
@@ -40,34 +43,34 @@ type ed25519TokenVerifier struct {
 	now        func() time.Time
 }
 
-// NewEd25519TokenIssuer creates a token issuer from access-key to private-key mappings.
+// NewEd25519TokenIssuer creates a token issuer from custom-RTC-key-ID to private-key mappings.
 //
 // Key values may be PEM PKCS8 Ed25519 private keys, raw base64/base64url/hex
 // Ed25519 seeds, or raw base64/base64url/hex Ed25519 private keys.
 func NewEd25519TokenIssuer(privateKeys map[string]string) (TokenIssuer, error) {
 	parsed := make(map[string]ed25519.PrivateKey, len(privateKeys))
-	for accessKey, raw := range privateKeys {
+	for customRtcKeyID, raw := range privateKeys {
 		key, err := parseEd25519PrivateKey(raw)
 		if err != nil {
-			return nil, fmt.Errorf("private key %q: %w", accessKey, err)
+			return nil, fmt.Errorf("private key %q: %w", customRtcKeyID, err)
 		}
-		parsed[accessKey] = key
+		parsed[customRtcKeyID] = key
 	}
 	return &ed25519TokenIssuer{privateKeys: parsed}, nil
 }
 
-// NewEd25519TokenVerifier creates a token verifier from access-key to public-key mappings.
+// NewEd25519TokenVerifier creates a token verifier from custom-RTC-key-ID to custom-RTC-key mappings.
 //
 // Key values may be PEM PKIX Ed25519 public keys or raw base64/base64url/hex
 // Ed25519 public keys.
-func NewEd25519TokenVerifier(publicKeys map[string]string) (TokenVerifier, error) {
-	parsed := make(map[string]ed25519.PublicKey, len(publicKeys))
-	for accessKey, raw := range publicKeys {
+func NewEd25519TokenVerifier(customRtcKeys map[string]string) (TokenVerifier, error) {
+	parsed := make(map[string]ed25519.PublicKey, len(customRtcKeys))
+	for customRtcKeyID, raw := range customRtcKeys {
 		key, err := parseEd25519PublicKey(raw)
 		if err != nil {
-			return nil, fmt.Errorf("public key %q: %w", accessKey, err)
+			return nil, fmt.Errorf("custom RTC key %q: %w", customRtcKeyID, err)
 		}
-		parsed[accessKey] = key
+		parsed[customRtcKeyID] = key
 	}
 	verifier := &ed25519TokenVerifier{
 		publicKeys: parsed,
@@ -76,10 +79,10 @@ func NewEd25519TokenVerifier(publicKeys map[string]string) (TokenVerifier, error
 	return verifier, nil
 }
 
-func (i *ed25519TokenIssuer) Issue(service, accessKey, deviceID, queryString string, ttl time.Duration) (string, error) {
-	privateKey, ok := i.privateKeys[accessKey]
+func (i *ed25519TokenIssuer) Issue(service, customRtcKeyID, deviceID, queryString string, ttl time.Duration) (string, error) {
+	privateKey, ok := i.privateKeys[customRtcKeyID]
 	if !ok {
-		return "", ErrUnknownAccessKey
+		return "", ErrUnknownCustomRtcKey
 	}
 	scope, err := scopeFor(service, queryString)
 	if err != nil {
@@ -90,7 +93,7 @@ func (i *ed25519TokenIssuer) Issue(service, accessKey, deviceID, queryString str
 	claims := TokenClaims{
 		Subject:   deviceID,
 		Scope:     scope,
-		Issuer:    accessKey,
+		Issuer:    customRtcKeyID,
 		IssuedAt:  now.Unix(),
 		ExpiresAt: now.Add(ttl).Unix(),
 	}
@@ -118,7 +121,7 @@ func (v *ed25519TokenVerifier) Verify(service, deviceID, queryString, token stri
 	}
 	publicKey, ok := v.publicKeys[claims.Issuer]
 	if !ok || claims.Issuer == "" {
-		return nil, ErrUnknownAccessKey
+		return nil, ErrUnknownCustomRtcKey
 	}
 	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil {

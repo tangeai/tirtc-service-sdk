@@ -68,8 +68,8 @@ whip.DELETE("/echo/resource/:session_id", echoDeleteHandler(echo))
 cd examples/quick-start
 go run -tags tirtc_clib . \
   -service quick-start \
-  -access-key "$TIRTC_ACCESS_KEY" \
-  -public-key "$TIRTC_PUBLIC_KEY"
+  -custom-rtc-key-id "$TIRTC_CUSTOM_RTC_KEY_ID" \
+  -custom-rtc-key "$TIRTC_CUSTOM_RTC_KEY"
 ```
 
 `examples/observable-service` 重点展示结构化日志、Stats 快照、Echo/认证 Observer 以及示例 `/metrics` 入口。

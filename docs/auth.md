@@ -23,7 +23,7 @@ Claims：
 {
   "sub": "<device-id>",
   "scope": "connect:<service>:<sha256hex(canonical_query)>",
-  "iss": "<access-key>",
+  "iss": "<custom-rtc-key-id>",
   "iat": 1710000000,
   "exp": 1712592000
 }

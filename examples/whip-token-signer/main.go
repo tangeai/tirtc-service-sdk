@@ -14,12 +14,12 @@ import (
 )
 
 type options struct {
-	service    string
-	accessKey  string
-	privateKey string
-	deviceID   string
-	rawQuery   string
-	ttl        time.Duration
+	service        string
+	customRtcKeyID string
+	privateKey     string
+	deviceID       string
+	rawQuery       string
+	ttl            time.Duration
 }
 
 type connectionParams struct {
@@ -30,7 +30,7 @@ type connectionParams struct {
 func main() {
 	var opts options
 	flag.StringVar(&opts.service, "service", "", "registered WHIP service name")
-	flag.StringVar(&opts.accessKey, "access-key", "", "TiRTC-X access key ID")
+	flag.StringVar(&opts.customRtcKeyID, "custom-rtc-key-id", "", "registered Custom RTC Key ID")
 	flag.StringVar(&opts.privateKey, "private-key", "", "Ed25519 private key used to issue the token")
 	flag.StringVar(&opts.deviceID, "device-id", "", "authorized TiRTC device ID")
 	flag.StringVar(&opts.rawQuery, "query", "", "optional raw peer_id query, without '?'")
@@ -52,14 +52,14 @@ func main() {
 
 func signWHIPToken(opts options) (connectionParams, error) {
 	opts.service = strings.TrimSpace(opts.service)
-	opts.accessKey = strings.TrimSpace(opts.accessKey)
+	opts.customRtcKeyID = strings.TrimSpace(opts.customRtcKeyID)
 	opts.deviceID = strings.TrimSpace(opts.deviceID)
 	opts.rawQuery = strings.TrimPrefix(opts.rawQuery, "?")
 	switch {
 	case opts.service == "":
 		return connectionParams{}, errors.New("-service is required")
-	case opts.accessKey == "":
-		return connectionParams{}, errors.New("-access-key is required")
+	case opts.customRtcKeyID == "":
+		return connectionParams{}, errors.New("-custom-rtc-key-id is required")
 	case strings.TrimSpace(opts.privateKey) == "":
 		return connectionParams{}, errors.New("-private-key is required")
 	case opts.deviceID == "":
@@ -77,14 +77,14 @@ func signWHIPToken(opts options) (connectionParams, error) {
 	}
 
 	issuer, err := tirtcxauth.NewEd25519TokenIssuer(map[string]string{
-		opts.accessKey: opts.privateKey,
+		opts.customRtcKeyID: opts.privateKey,
 	})
 	if err != nil {
 		return connectionParams{}, fmt.Errorf("create token issuer: %w", err)
 	}
 	token, err := issuer.Issue(
 		opts.service,
-		opts.accessKey,
+		opts.customRtcKeyID,
 		opts.deviceID,
 		opts.rawQuery,
 		opts.ttl,

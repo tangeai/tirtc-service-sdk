@@ -114,8 +114,8 @@ if err := conn.Err(); err != nil {
 ```bash
 cd examples/quick-start
 go run -tags tirtc_clib . \
-  -access-key ak1 \
-  -public-key "$PUBLIC_KEY" \
+  -custom-rtc-key-id custom-rtc-key-1 \
+  -custom-rtc-key "$TIRTC_CUSTOM_RTC_KEY" \
   -service quick-start
 ```
 

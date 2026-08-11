@@ -12,7 +12,7 @@
 cd examples
 go run ./whip-token-signer \
   -service quick-start \
-  -access-key "$TIRTC_ACCESS_KEY" \
+  -custom-rtc-key-id "$TIRTC_CUSTOM_RTC_KEY_ID" \
   -private-key "$TIRTC_PRIVATE_KEY" \
   -device-id your_device_id \
   -query '_tg_mode=echo'
@@ -29,8 +29,8 @@ cd examples/quick-start
 go run -tags tirtc_clib . \
   -listen :8080 \
   -service quick-start \
-  -access-key "$TIRTC_ACCESS_KEY" \
-  -public-key "$TIRTC_PUBLIC_KEY" \
+  -custom-rtc-key-id "$TIRTC_CUSTOM_RTC_KEY_ID" \
+  -custom-rtc-key "$TIRTC_CUSTOM_RTC_KEY" \
   -candidate 203.0.113.10
 ```
 
@@ -43,8 +43,8 @@ cd examples/observable-service
 go run -tags tirtc_clib . \
   -listen :8080 \
   -service echo \
-  -access-key "$TIRTC_ACCESS_KEY" \
-  -public-key "$TIRTC_PUBLIC_KEY" \
+  -custom-rtc-key-id "$TIRTC_CUSTOM_RTC_KEY_ID" \
+  -custom-rtc-key "$TIRTC_CUSTOM_RTC_KEY" \
   -candidate 203.0.113.10
 ```
 
@@ -59,8 +59,8 @@ cd examples/gin-service
 go run -tags tirtc_clib . \
   -listen :8080 \
   -service gin-service \
-  -access-key "$TIRTC_ACCESS_KEY" \
-  -public-key "$TIRTC_PUBLIC_KEY" \
+  -custom-rtc-key-id "$TIRTC_CUSTOM_RTC_KEY_ID" \
+  -custom-rtc-key "$TIRTC_CUSTOM_RTC_KEY" \
   -candidate 203.0.113.10
 ```
 

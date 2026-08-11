@@ -15,12 +15,12 @@ func TestSignWHIPToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	params, err := signWHIPToken(options{
-		service:    "echo",
-		accessKey:  "ak1",
-		privateKey: base64.RawURLEncoding.EncodeToString(privateKey),
-		deviceID:   "device-1",
-		rawQuery:   "?room=test&_tg_mode=echo",
-		ttl:        time.Hour,
+		service:        "echo",
+		customRtcKeyID: "custom-rtc-key-1",
+		privateKey:     base64.RawURLEncoding.EncodeToString(privateKey),
+		deviceID:       "device-1",
+		rawQuery:       "?room=test&_tg_mode=echo",
+		ttl:            time.Hour,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -29,7 +29,7 @@ func TestSignWHIPToken(t *testing.T) {
 		t.Fatalf("peer_id = %q", params.PeerID)
 	}
 	verifier, err := tirtcxauth.NewEd25519TokenVerifier(map[string]string{
-		"ak1": base64.RawURLEncoding.EncodeToString(publicKey),
+		"custom-rtc-key-1": base64.RawURLEncoding.EncodeToString(publicKey),
 	})
 	if err != nil {
 		t.Fatal(err)
