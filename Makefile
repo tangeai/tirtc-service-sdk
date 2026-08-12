@@ -1,0 +1,13 @@
+.PHONY: test test-race test-core test-examples
+
+test: test-core test-examples
+
+test-core:
+	go test ./...
+
+test-examples:
+	cd examples && go test ./...
+
+test-race:
+	go test -race ./...
+	cd examples && go test -race ./...

@@ -1,6 +1,6 @@
-# Go SDK
+# TiRTC 自定义 RTC 服务 SDK
 
-Go SDK 位于 `go/`，分为四层：
+Go Module 位于仓库根目录，分为四层：
 
 - `internal/tirtcclib`：供 `pkg/tirtcx` 使用的内部 `tiRTC.h` 封装。
 - `pkg/tirtcxauth`：基于 Ed25519 的 TiRTC-X Token 签发与验证。
@@ -15,7 +15,7 @@ Go SDK 位于 `go/`，分为四层：
 
 这些职责由应用服务端承担，除非使用 `pkg/whipecho` 等明确提供相应能力的可选高层组件。
 
-仓库包含用于最小接入的 `go/examples/quick-start`，以及展示 Stats、Observer、Metrics 和结构化日志的 `go/examples/observable-service`。
+仓库包含用于最小接入的 `examples/quick-start`，以及展示 Stats、Observer、Metrics 和结构化日志的 `examples/observable-service`。
 
 ## 日志
 
@@ -112,10 +112,10 @@ if err := conn.Err(); err != nil {
 ## 示例服务
 
 ```bash
-cd go/examples/quick-start
+cd examples/quick-start
 go run -tags tirtc_clib . \
-  -access-key ak1 \
-  -public-key "$PUBLIC_KEY" \
+  -custom-rtc-key-id custom-rtc-key-1 \
+  -custom-rtc-key "$TIRTC_CUSTOM_RTC_KEY" \
   -service quick-start
 ```
 
