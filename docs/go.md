@@ -23,6 +23,8 @@ Go SDK 和 `whipecho` 使用标准库 `log/slog`。应用可在启动时调用 `
 
 `tirtcx.SetNativeLogLevel` 只控制 TiRTC 原生库的日志等级，应在 `tirtcx.Init` 前调用，不影响 Go `slog` 日志。
 
+若服务会发送实时音频，可在 `tirtcx.Init` 前调用 `tirtcx.SetAudioRedundancyLossThreshold` 配置 TGTRP 音频冗余的丢包阈值。默认值为 10；`0` 始终发送冗余音频包，`100` 则关闭。该配置作用于全部 TGTRP 连接，返回 `-1` 表示当前原生库不可用或不支持该能力。
+
 当 TiRTC 回调携带的连接句柄无法匹配到 `Conn` 时，`tirtcx` 会通过 `slog.Default()` 输出包含 `component`、`event` 和 `handle` 的警告日志。日志不包含媒体内容、Token 或业务数据。
 
 ## clib 映射
