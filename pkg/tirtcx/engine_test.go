@@ -21,6 +21,28 @@ func replaceNativeStart(
 	})
 }
 
+func replaceNativeSetAudioRedundancyLossThreshold(t *testing.T, replacement func(int) int) {
+	t.Helper()
+	previous := nativeSetAudioRedundancyLossThreshold
+	nativeSetAudioRedundancyLossThreshold = replacement
+	t.Cleanup(func() {
+		nativeSetAudioRedundancyLossThreshold = previous
+	})
+}
+
+func TestSetAudioRedundancyLossThreshold(t *testing.T) {
+	replaceNativeSetAudioRedundancyLossThreshold(t, func(lossPercent int) int {
+		if lossPercent != 15 {
+			t.Fatalf("lossPercent = %d, want 15", lossPercent)
+		}
+		return 15
+	})
+
+	if got := SetAudioRedundancyLossThreshold(15); got != 15 {
+		t.Fatalf("SetAudioRedundancyLossThreshold() = %d, want 15", got)
+	}
+}
+
 func TestStartWaitsForStartedEvent(t *testing.T) {
 	replaceNativeStart(t, func(deviceID string, callbacks *tirtcclib.Callbacks) error {
 		if deviceID != "" {

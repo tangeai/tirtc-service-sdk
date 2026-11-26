@@ -42,6 +42,12 @@ func TiRtcLogSetLevel(level int) {
 	C.TiRtcLogSetLevel(C.int(level))
 }
 
+// TiRtcSetAudioRedundancyLossThreshold maps to tiRTC.h
+// TiRtcSetAudioRedundancyLossThreshold.
+func TiRtcSetAudioRedundancyLossThreshold(lossPercent int) int {
+	return int(C.TiRtcSetAudioRedundancyLossThreshold(C.int(lossPercent)))
+}
+
 // TiRtcInit maps to tiRTC.h TiRtcInit.
 func TiRtcInit() error {
 	return ErrorFromCode(int(C.TiRtcInit()))

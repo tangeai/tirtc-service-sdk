@@ -6,7 +6,10 @@ import (
 	"github.com/tangeai/tirtc-service-sdk/v2/internal/tirtcclib"
 )
 
-var nativeStart = tirtcclib.TiRtcStart
+var (
+	nativeStart                           = tirtcclib.TiRtcStart
+	nativeSetAudioRedundancyLossThreshold = tirtcclib.TiRtcSetAudioRedundancyLossThreshold
+)
 
 // Init maps to TiRtcInit and registers SDK callbacks through Start.
 func Init() error {
@@ -17,6 +20,16 @@ func Init() error {
 // enable TGTRP logging at level-10 and should be set before Init.
 func SetNativeLogLevel(level int) {
 	tirtcclib.TiRtcLogSetLevel(level)
+}
+
+// SetAudioRedundancyLossThreshold configures the global TGTRP packet-loss
+// percentage above which redundant audio packets are sent. Values are clamped
+// by the native SDK to 0..100; 0 always enables redundancy and 100 disables
+// it. Call this before Init and before creating connections. It returns the
+// threshold accepted by the native SDK, or -1 when the native library is
+// unavailable or does not support the capability.
+func SetAudioRedundancyLossThreshold(lossPercent int) int {
+	return nativeSetAudioRedundancyLossThreshold(lossPercent)
 }
 
 // Start starts TiRTC in WHIP service mode and waits until the native SDK

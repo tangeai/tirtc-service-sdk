@@ -13,11 +13,9 @@ Go SDK 只依赖公开的 `tiRTC.h` API，不暴露或要求使用本仓库中�
 
 ## 原生库
 
-本 Git 仓库不保存原生库二进制文件。请从以下地址下载 SDK：
-
-```text
-https://repo-sdk.tange-ai.com/repository/tirtc-sdks/ci/linux-x86_64-desktop/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard.tgz
-```
+本 Git 仓库不保存原生库二进制文件。请从正式分发渠道下载与仓库头文件一致的
+TiRTC C SDK **2.6.3** Linux x86_64 desktop 发行包。头文件、`libTiRTC.a` 和
+`libwebrtc.so` 必须来自同一个 2.6.3 发行包，不能混用旧的 CI 构建包。
 
 安装命令见 `clib/README.md`。Go SDK 需要：
 

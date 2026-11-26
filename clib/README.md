@@ -2,16 +2,13 @@
 
 本 Git 仓库不保存 TiRTC 原生库二进制文件。请从正式分发渠道获取与语言和平台匹配的 TiRTC SDK。
 
-Go SDK 使用以下 SDK 包：
-
-```text
-https://repo-sdk.tange-ai.com/repository/tirtc-sdks/ci/linux-x86_64-desktop/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard.tgz
-```
+Go SDK 使用 TiRTC C SDK **2.6.3** 的 Linux x86_64 desktop 发行包。请从正式分发渠道取得
+该版本对应的包；不要混用旧的 CI 构建包或其他版本的头文件、静态库和运行时库。
 
 使用 `tirtc_clib` 构建标签构建前，先下载并安装原生库：
 
 ```bash
-TIRTC_SDK_URL='https://repo-sdk.tange-ai.com/repository/tirtc-sdks/ci/linux-x86_64-desktop/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard/tirtc__linux-x86_64-desktop__webrtc-linux-clang__e84eff7__20260714-112702__standard.tgz'
+TIRTC_SDK_URL='<TiRTC C SDK 2.6.3 Linux x86_64 desktop 发行包 URL>'
 tmp_dir="$(mktemp -d)"
 curl -fsSL --retry 3 "$TIRTC_SDK_URL" | tar -xz -C "$tmp_dir"
 sdk_dir="$(find "$tmp_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)"

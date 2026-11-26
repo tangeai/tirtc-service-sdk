@@ -17,9 +17,11 @@ const (
 	TiRtcOptWakeup           Option = 6
 	TiRtcOptRestrictedNet    Option = 7
 	TiRtcOptMaxSendBuffer    Option = 8
-	TiRtcOptAppID            Option = 9
-	TiRtcOptClientID         Option = 10
-	TiRtcOptConnectCacheSize Option = 11
+	TiRtcOptConnectCache     Option = 9
+	TiRtcOptAppID            Option = 10
+	TiRtcOptClientID         Option = 11
+	TiRtcOptTGTRPPollTimeout Option = 12
+	TiRtcOptSDKTaskPriority  Option = 13
 )
 
 // SystemEvent maps to tiRTC.h TIRTCSYSEVENT.

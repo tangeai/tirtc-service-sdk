@@ -10,6 +10,12 @@ func TiRtcGetVersion() string {
 // TiRtcLogSetLevel maps to tiRTC.h TiRtcLogSetLevel.
 func TiRtcLogSetLevel(level int) {}
 
+// TiRtcSetAudioRedundancyLossThreshold maps to tiRTC.h
+// TiRtcSetAudioRedundancyLossThreshold.
+func TiRtcSetAudioRedundancyLossThreshold(lossPercent int) int {
+	return -1
+}
+
 // TiRtcInit maps to tiRTC.h TiRtcInit.
 func TiRtcInit() error {
 	return ErrUnavailable
